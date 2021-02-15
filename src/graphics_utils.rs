@@ -8,16 +8,20 @@ pub struct Ray {
 }
 
 impl Ray {
-  fn index(&self, t: f64) -> Point3<f64> {
+  pub fn index(&self, t: f64) -> Point3<f64> {
     self.origin + t * self.direction
   }
+}
 
-  pub fn color(&self) -> ColorRGB {
-    let unit_direction = self.direction / (self.direction.norm() as f64);
-    let t = 0.5 * (unit_direction.y + 1.0);
+pub struct Hit {
+  point: Point3<f64>,
+  normal: Vector3<f64>,
+  t: f64,
+  front_face: bool,
+}
 
-    (1.0 - t) * ColorRGB::new(1., 1., 1.) + t * ColorRGB::new(0.5, 0.7, 1.0)
-  }
+pub trait Hittable {
+  fn check_ray_hit(&self, ray: &Ray, t_min: f64, t_max: f64, hit: &Hit) -> bool;
 }
 
 #[cfg(test)]
