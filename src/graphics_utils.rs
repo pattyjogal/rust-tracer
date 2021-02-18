@@ -14,14 +14,27 @@ impl Ray {
 }
 
 pub struct Hit {
-  point: Point3<f64>,
-  normal: Vector3<f64>,
-  t: f64,
-  front_face: bool,
+  pub t: f64,
+  pub point: Point3<f64>,
+  pub normal: Vector3<f64>,
+  pub front_face: bool,
+}
+
+impl Hit {
+  pub fn new(ray: &Ray, t: f64, outward_normal: Vector3<f64>) -> Hit {
+    let front_face = ray.direction.dot(&outward_normal) < 0.;
+
+    Hit {
+      t,
+      point: ray.index(t),
+      normal: if front_face { outward_normal } else { -outward_normal },
+      front_face,
+    }
+  }
 }
 
 pub trait Hittable {
-  fn check_ray_hit(&self, ray: &Ray, t_min: f64, t_max: f64, hit: &Hit) -> bool;
+  fn check_ray_hit(&self, ray: &Ray, t_min: f64, t_max: f64) -> Option<Hit>;
 }
 
 #[cfg(test)]

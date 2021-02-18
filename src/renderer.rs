@@ -7,7 +7,7 @@ use std::vec::Vec;
 use nalgebra::{Point3, Vector3};
 use png;
 
-use super::graphics_utils::{ColorRGB, Ray, Hit, Hittable};
+use super::graphics_utils::{ColorRGB, Hit, Hittable, Ray};
 
 pub struct RenderedScene {
   aspect_ratio: f64,
@@ -21,6 +21,7 @@ pub struct RenderedScene {
   horizontal: Vector3<f64>,
   vertical: Vector3<f64>,
   lower_left_corner: Vector3<f64>,
+  objects: Vec<Box<dyn Renderable>>,
 }
 
 impl RenderedScene {
@@ -32,6 +33,7 @@ impl RenderedScene {
     viewport_width: f64,
     focal_length: f64,
     default_color: ColorRGB,
+    objects: Vec<Box<dyn Renderable>>,
   ) -> Self {
     let origin = Vector3::new(0., 0., 0.);
     let horizontal = Vector3::new(viewport_width, 0., 0.);
@@ -54,18 +56,19 @@ impl RenderedScene {
       horizontal,
       vertical,
       lower_left_corner,
+      objects,
     }
   }
 
-  pub fn render_object(&mut self, object: &impl Colorable) {
-    for j in (0..self.image_height) {
+  pub fn render(&mut self) {
+    for j in 0..self.image_height {
       for i in 0..self.image_width {
-        self.render_pixel(i, j, object);
+        self.render_pixel(i, j);
       }
     }
   }
 
-  fn render_pixel(&mut self, x: usize, y: usize, object: &impl Colorable) {
+  fn render_pixel(&mut self, x: usize, y: usize) {
     let u = (x as f64) / (self.image_width as f64 - 1.);
     let v = (y as f64) / (self.image_height as f64 - 1.);
     let ray = Ray {
@@ -73,9 +76,26 @@ impl RenderedScene {
       direction: self.lower_left_corner + u * self.horizontal + v * self.vertical - self.origin,
     };
 
-    if object.check_ray_hit(&ray) {
-      self.pixel_data[x + y * self.image_width] = object.color_at_ray_hit(&ray);
+    match self.hit_objects(&ray, 0., std::f64::INFINITY) {
+      Some((_hit, object)) => {
+        self.pixel_data[x + y * self.image_width] = object.color_at_ray_hit(&ray)
+      }
+      None => {}
     }
+  }
+
+  fn hit_objects(&self, ray: &Ray, t_min: f64, t_max: f64) -> Option<(Hit, &Box<dyn Renderable>)> {
+    let mut possible_obj_hit: Option<(Hit, &Box<dyn Renderable>)> = None;
+    let closest_so_far = t_max;
+
+    for object in &self.objects {
+      match object.check_ray_hit(ray, t_min, closest_so_far) {
+        Some(hit) => possible_obj_hit = Some((hit, object)),
+        None => {}
+      }
+    }
+
+    possible_obj_hit
   }
 
   pub fn export_to_png(&self, filename: &str) -> Result<(), io::Error> {
@@ -104,6 +124,8 @@ pub trait Colorable {
   fn color_at_ray_hit(&self, ray: &Ray) -> ColorRGB;
 }
 
+pub trait Renderable: Colorable + Hittable {}
+
 /// Plane
 pub struct Plane {
   pub top_left_corner: Point3<f64>,
@@ -111,8 +133,8 @@ pub struct Plane {
 }
 
 impl Hittable for Plane {
-  fn check_ray_hit(&self, ray: &Ray, t_min: f64, t_max: f64, hit: &Hit) -> bool {
-    true
+  fn check_ray_hit(&self, ray: &Ray, t_min: f64, t_max: f64) -> Option<Hit> {
+    None
   }
 }
 
@@ -142,9 +164,34 @@ impl Sphere {
   }
 }
 
+impl Renderable for Sphere {}
+
 impl Hittable for Sphere {
-  fn check_ray_hit(&self, ray: &Ray, t_min: f64, t_max: f64, hit: &Hit) -> bool {
-    self.calc_discriminant(ray) > 0.
+  fn check_ray_hit(&self, ray: &Ray, t_min: f64, t_max: f64) -> Option<Hit> {
+    let discriminant = self.calc_discriminant(ray);
+    if discriminant < 0. {
+      return None;
+    }
+    let sqrtd = discriminant.sqrt();
+
+    // Find nearest root in acceptable range
+    let translated_origin = ray.origin - self.center;
+    let a = ray.direction.dot(&ray.direction);
+    let hb = translated_origin.dot(&ray.direction);
+
+    let mut root = (-hb - sqrtd) / a;
+    if root < t_min || t_max < root {
+      root = (-hb + sqrtd) / a;
+      if root < t_min || t_max < root {
+        return None;
+      }
+    }
+
+    let point = ray.index(root);
+    let outward_normal = (point - self.center) / self.radius;
+
+    // TODO: Maybe move Hit to Ray?
+    Some(Hit::new(ray, root, outward_normal))
   }
 }
 
@@ -158,7 +205,6 @@ impl Colorable for Sphere {
 
     let z_scaled = ray.index(t) - Vector3::new(0., 0., -1.);
     let n = z_scaled / z_scaled.coords.norm();
-    
     0.5 * ColorRGB::new(n.x + 1., n.y + 1., n.z + 1.)
   }
 }
