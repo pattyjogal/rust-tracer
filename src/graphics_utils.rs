@@ -37,6 +37,10 @@ pub trait Hittable {
   fn check_ray_hit(&self, ray: &Ray, t_min: f64, t_max: f64) -> Option<Hit>;
 }
 
+pub fn unit_vector(vec: Vector3<f64>) -> Vector3<f64> {
+  vec / vec.norm()
+}
+
 #[cfg(test)]
 mod tests {
   use super::*;

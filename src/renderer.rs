@@ -7,6 +7,7 @@ use std::vec::Vec;
 use nalgebra::{Point3, Vector3};
 use png;
 
+use super::camera::Camera;
 use super::graphics_utils::{ColorRGB, Hit, Hittable, Ray};
 
 pub struct RenderedScene {
@@ -22,6 +23,8 @@ pub struct RenderedScene {
   vertical: Vector3<f64>,
   lower_left_corner: Vector3<f64>,
   objects: Vec<Box<dyn Renderable>>,
+  camera: Camera,
+  mj_fine_grid_size: usize,
 }
 
 impl RenderedScene {
@@ -34,6 +37,8 @@ impl RenderedScene {
     focal_length: f64,
     default_color: ColorRGB,
     objects: Vec<Box<dyn Renderable>>,
+    camera: Camera,
+    mj_fine_grid_size: usize,
   ) -> Self {
     let origin = Vector3::new(0., 0., 0.);
     let horizontal = Vector3::new(viewport_width, 0., 0.);
@@ -57,6 +62,8 @@ impl RenderedScene {
       vertical,
       lower_left_corner,
       objects,
+      camera,
+      mj_fine_grid_size,
     }
   }
 
@@ -71,16 +78,24 @@ impl RenderedScene {
   fn render_pixel(&mut self, x: usize, y: usize) {
     let u = (x as f64) / (self.image_width as f64 - 1.);
     let v = (y as f64) / (self.image_height as f64 - 1.);
-    let ray = Ray {
-      origin: Point3::from(self.origin),
-      direction: self.lower_left_corner + u * self.horizontal + v * self.vertical - self.origin,
-    };
 
-    match self.hit_objects(&ray, 0., std::f64::INFINITY) {
-      Some((_hit, object)) => {
-        self.pixel_data[x + y * self.image_width] = object.color_at_ray_hit(&ray)
+    // Multi-Jittered sampling
+    for i in 0..self.mj_fine_grid_size {
+      for j in 0..self.mj_fine_grid_size {
+        let i_offset = (i as f64 / self.mj_fine_grid_size as f64) / (self.image_width as f64 - 1.);
+        let j_offset = (j as f64 / self.mj_fine_grid_size as f64) / (self.image_height as f64 - 1.);
+        
+        let ray = self.camera.get_ray(u + i_offset, v + j_offset);
+        match self.hit_objects(&ray, 0., std::f64::INFINITY) {
+          Some((_hit, object)) => {
+            // TODO: Only works if default color is black
+            let pixel_val = self.pixel_data[x + y * self.image_width];
+            self.pixel_data[x + y * self.image_width] = pixel_val + object.color_at_ray_hit(&ray) / self.mj_fine_grid_size.pow(2) as f64
+          }
+          None => {
+          }
+        }
       }
-      None => {}
     }
   }
 
@@ -128,22 +143,28 @@ pub trait Renderable: Colorable + Hittable {}
 
 /// Plane
 pub struct Plane {
-  pub top_left_corner: Point3<f64>,
-  pub bottom_right_corner: Point3<f64>,
+  pub point: Point3<f64>,
+  pub normal: Vector3<f64>,
 }
+
+impl Renderable for Plane {}
 
 impl Hittable for Plane {
   fn check_ray_hit(&self, ray: &Ray, t_min: f64, t_max: f64) -> Option<Hit> {
-    None
+    let Ray { origin, direction } = ray;
+    let t = (self.point - origin).dot(&self.normal) / direction.dot(&self.normal);
+
+    if t.is_nan() || t < 0. {
+      return None;
+    } else {
+      Some(Hit::new(ray, t, self.normal))
+    }
   }
 }
 
 impl Colorable for Plane {
   fn color_at_ray_hit(&self, ray: &Ray) -> ColorRGB {
-    let unit_direction = ray.direction / (ray.direction.norm() as f64);
-    let t = 0.5 * (unit_direction.y + 1.0);
-
-    (1.0 - t) * ColorRGB::new(1., 1., 1.) + t * ColorRGB::new(0.5, 0.7, 1.0)
+    ColorRGB::new(1., 1., 1.)
   }
 }
 

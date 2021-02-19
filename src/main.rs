@@ -1,5 +1,6 @@
 use nalgebra::{Point3, Vector3};
 
+mod camera;
 mod graphics_utils;
 mod renderer;
 
@@ -15,7 +16,19 @@ fn main() {
     println!("Image height: {}", IMAGE_HEIGHT);
 
     // Render
+    let camera = camera::Camera::new(
+        Point3::new(0., 0., 0.),
+        Point3::new(0., 0., -1.),
+        Vector3::new(0., 1., 0.),
+        90.,
+        ASPECT_RATIO,
+        camera::CameraMode::Perspective,
+    );
     let objects: Vec<Box<dyn renderer::Renderable>> = vec![
+        Box::new(renderer::Plane {
+            point: Point3::new(0., 0., -5.),
+            normal: Vector3::new(0., 1., 0.)
+        }),
         Box::new(renderer::Sphere {
             center: Point3::new(0., -100.5, -1.),
             radius: 100.,
@@ -25,13 +38,13 @@ fn main() {
             radius: 0.5,
         }),
         Box::new(renderer::Sphere {
-            center: Point3::new(0., 0., -1.),
+            center: Point3::new(0., 0., -2.),
             radius: 0.5,
         }),
-        Box::new(renderer::Sphere {
-            center: Point3::new(1., 0., -1.),
-            radius: 0.5,
-        }),
+        // Box::new(renderer::Sphere {s
+        //     center: Point3::new(1., 0., -1.),
+        //     radius: 0.5,
+        // }),
     ];
 
     let mut scene = renderer::RenderedScene::new(
@@ -43,8 +56,9 @@ fn main() {
         focal_length,
         graphics_utils::ColorRGB::new(0., 0., 0.),
         objects,
+        camera,
+        8,
     );
-    
     scene.render();
 
     // Export
