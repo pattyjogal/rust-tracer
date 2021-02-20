@@ -101,11 +101,14 @@ impl RenderedScene {
 
   fn hit_objects(&self, ray: &Ray, t_min: f64, t_max: f64) -> Option<(Hit, &Box<dyn Renderable>)> {
     let mut possible_obj_hit: Option<(Hit, &Box<dyn Renderable>)> = None;
-    let closest_so_far = t_max;
+    let mut closest_so_far = t_max;
 
     for object in &self.objects {
       match object.check_ray_hit(ray, t_min, closest_so_far) {
-        Some(hit) => possible_obj_hit = Some((hit, object)),
+        Some(hit) => {
+          closest_so_far = hit.t;
+          possible_obj_hit = Some((hit, object));
+        },
         None => {}
       }
     }
@@ -154,8 +157,8 @@ impl Hittable for Plane {
     let Ray { origin, direction } = ray;
     let t = (self.point - origin).dot(&self.normal) / direction.dot(&self.normal);
 
-    if t.is_nan() || t < 0. {
-      return None;
+    if t.is_nan() || t < t_min || t > t_max {
+      None
     } else {
       Some(Hit::new(ray, t, self.normal))
     }
@@ -164,7 +167,7 @@ impl Hittable for Plane {
 
 impl Colorable for Plane {
   fn color_at_ray_hit(&self, ray: &Ray) -> ColorRGB {
-    ColorRGB::new(1., 1., 1.)
+    ColorRGB::new(1., 0., 1.)
   }
 }
 
@@ -228,4 +231,9 @@ impl Colorable for Sphere {
     let n = z_scaled / z_scaled.coords.norm();
     0.5 * ColorRGB::new(n.x + 1., n.y + 1., n.z + 1.)
   }
+}
+
+// Point Light
+pub struct PointLight {
+  pub point: Point3<f64>,
 }

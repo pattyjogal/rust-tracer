@@ -25,13 +25,13 @@ fn main() {
         camera::CameraMode::Perspective,
     );
     let objects: Vec<Box<dyn renderer::Renderable>> = vec![
+        // Box::new(renderer::Sphere {
+        //     center: Point3::new(0., -100.5, -1.),
+        //     radius: 100.,
+        // }),
         Box::new(renderer::Plane {
-            point: Point3::new(0., 0., -5.),
+            point: Point3::new(0., 0.5, 0.),
             normal: Vector3::new(0., 1., 0.)
-        }),
-        Box::new(renderer::Sphere {
-            center: Point3::new(0., -100.5, -1.),
-            radius: 100.,
         }),
         Box::new(renderer::Sphere {
             center: Point3::new(-1., 0., -1.),
@@ -57,7 +57,7 @@ fn main() {
         graphics_utils::ColorRGB::new(0., 0., 0.),
         objects,
         camera,
-        8,
+        1,
     );
     scene.render();
 
