@@ -24,6 +24,15 @@ fn main() {
         ASPECT_RATIO,
         camera::CameraMode::Perspective,
     );
+
+    let red_mat = renderer::Material::new(0.3, 0.7, graphics_utils::ColorRGB::new(1., 0., 0.));
+    let teal_mat = renderer::Material::new(0.3, 0.7, graphics_utils::ColorRGB::new(0., 0.5, 0.5));
+
+    let light = renderer::PointLight {
+        point: Point3::new(1., 1., 1.),
+        color: graphics_utils::ColorRGB::new(1., 1., 1.),
+    };
+
     let objects: Vec<Box<dyn renderer::Renderable>> = vec![
         // Box::new(renderer::Sphere {
         //     center: Point3::new(0., -100.5, -1.),
@@ -31,15 +40,18 @@ fn main() {
         // }),
         Box::new(renderer::Plane {
             point: Point3::new(0., 0.5, 0.),
-            normal: Vector3::new(0., 1., 0.)
+            normal: Vector3::new(0., 1., 0.),
+            material: teal_mat,
         }),
         Box::new(renderer::Sphere {
             center: Point3::new(-1., 0., -1.),
             radius: 0.5,
+            material: red_mat,
         }),
         Box::new(renderer::Sphere {
             center: Point3::new(0., 0., -2.),
             radius: 0.5,
+            material: red_mat,
         }),
         // Box::new(renderer::Sphere {s
         //     center: Point3::new(1., 0., -1.),
@@ -58,6 +70,7 @@ fn main() {
         objects,
         camera,
         1,
+        light,
     );
     scene.render();
 

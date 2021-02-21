@@ -8,7 +8,7 @@ use nalgebra::{Point3, Vector3};
 use png;
 
 use super::camera::Camera;
-use super::graphics_utils::{ColorRGB, Hit, Hittable, Ray};
+use super::graphics_utils::{random_in_unit_sphere, ColorRGB, Hit, Hittable, Ray};
 
 pub struct RenderedScene {
   aspect_ratio: f64,
@@ -25,6 +25,7 @@ pub struct RenderedScene {
   objects: Vec<Box<dyn Renderable>>,
   camera: Camera,
   mj_fine_grid_size: usize,
+  light: PointLight,
 }
 
 impl RenderedScene {
@@ -39,6 +40,7 @@ impl RenderedScene {
     objects: Vec<Box<dyn Renderable>>,
     camera: Camera,
     mj_fine_grid_size: usize,
+    light: PointLight,
   ) -> Self {
     let origin = Vector3::new(0., 0., 0.);
     let horizontal = Vector3::new(viewport_width, 0., 0.);
@@ -64,6 +66,7 @@ impl RenderedScene {
       objects,
       camera,
       mj_fine_grid_size,
+      light,
     }
   }
 
@@ -84,16 +87,21 @@ impl RenderedScene {
       for j in 0..self.mj_fine_grid_size {
         let i_offset = (i as f64 / self.mj_fine_grid_size as f64) / (self.image_width as f64 - 1.);
         let j_offset = (j as f64 / self.mj_fine_grid_size as f64) / (self.image_height as f64 - 1.);
-        
         let ray = self.camera.get_ray(u + i_offset, v + j_offset);
         match self.hit_objects(&ray, 0., std::f64::INFINITY) {
-          Some((_hit, object)) => {
+          Some((hit, object)) => {
             // TODO: Only works if default color is black
+            let target = hit.point + hit.normal + random_in_unit_sphere();
+            // let color = 0.5 * object.color_at_ray_hit(&ray);
+            let color =
+              object
+                .material()
+                .calculate_shade_at_hit(ColorRGB::new(1., 1., 1.), self.light, &hit);
             let pixel_val = self.pixel_data[x + y * self.image_width];
-            self.pixel_data[x + y * self.image_width] = pixel_val + object.color_at_ray_hit(&ray) / self.mj_fine_grid_size.pow(2) as f64
+            self.pixel_data[x + y * self.image_width] =
+              pixel_val + color / self.mj_fine_grid_size.pow(2) as f64
           }
-          None => {
-          }
+          None => {}
         }
       }
     }
@@ -108,7 +116,7 @@ impl RenderedScene {
         Some(hit) => {
           closest_so_far = hit.t;
           possible_obj_hit = Some((hit, object));
-        },
+        }
         None => {}
       }
     }
@@ -139,7 +147,8 @@ impl RenderedScene {
 }
 
 pub trait Colorable {
-  fn color_at_ray_hit(&self, ray: &Ray) -> ColorRGB;
+  fn color_at_ray_hit(&self, hit: &Ray) -> ColorRGB;
+  fn material(&self) -> &Material;
 }
 
 pub trait Renderable: Colorable + Hittable {}
@@ -148,6 +157,7 @@ pub trait Renderable: Colorable + Hittable {}
 pub struct Plane {
   pub point: Point3<f64>,
   pub normal: Vector3<f64>,
+  pub material: Material,
 }
 
 impl Renderable for Plane {}
@@ -167,7 +177,11 @@ impl Hittable for Plane {
 
 impl Colorable for Plane {
   fn color_at_ray_hit(&self, ray: &Ray) -> ColorRGB {
-    ColorRGB::new(1., 0., 1.)
+    return ColorRGB::new(0.8, 0.8, 0.8);
+  }
+
+  fn material(&self) -> &Material {
+    &self.material
   }
 }
 
@@ -175,6 +189,7 @@ impl Colorable for Plane {
 pub struct Sphere {
   pub center: Point3<f64>,
   pub radius: f64,
+  pub material: Material,
 }
 
 impl Sphere {
@@ -231,9 +246,42 @@ impl Colorable for Sphere {
     let n = z_scaled / z_scaled.coords.norm();
     0.5 * ColorRGB::new(n.x + 1., n.y + 1., n.z + 1.)
   }
+
+  fn material(&self) -> &Material {
+    &self.material
+  }
 }
 
 // Point Light
 pub struct PointLight {
   pub point: Point3<f64>,
+  pub color: ColorRGB,
+}
+
+pub struct Material {
+  k_diffuse: f64,
+  k_ambient: f64,
+  color: ColorRGB,
+}
+
+impl Material {
+  pub fn new(k_diffuse: f64, k_ambient: f64, color: ColorRGB) -> Material {
+    Material {
+      k_diffuse,
+      k_ambient,
+      color,
+    }
+  }
+
+  fn calculate_shade_at_hit(
+    &self,
+    ambient_color: ColorRGB,
+    light: PointLight,
+    hit: &Hit,
+  ) -> ColorRGB {
+    let ambient = self.k_ambient * ambient_color;
+    let diffuse =
+      self.k_diffuse * Vector3::from(light.point - hit.point).dot(&hit.normal) * light.color;
+    self.color.component_mul(&(ambient + diffuse))
+  }
 }

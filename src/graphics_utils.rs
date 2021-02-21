@@ -1,4 +1,5 @@
 use nalgebra::{Point3, Vector3};
+use rand::Rng;
 
 pub type ColorRGB = Vector3<f64>;
 
@@ -39,6 +40,16 @@ pub trait Hittable {
 
 pub fn unit_vector(vec: Vector3<f64>) -> Vector3<f64> {
   vec / vec.norm()
+}
+
+pub fn random_in_unit_sphere() -> Vector3<f64> {
+  let mut rng = rand::thread_rng();
+  loop {
+    let p = Vector3::new(rng.gen::<f64>(), rng.gen::<f64>(), rng.gen::<f64>());
+    if p.norm().powf(2.) < 1. {
+      return p
+    }
+  }
 }
 
 #[cfg(test)]
