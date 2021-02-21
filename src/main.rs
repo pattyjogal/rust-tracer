@@ -25,8 +25,8 @@ fn main() {
         camera::CameraMode::Perspective,
     );
 
-    let red_mat = renderer::Material::new(0.3, 0.7, graphics_utils::ColorRGB::new(1., 0., 0.));
-    let teal_mat = renderer::Material::new(0.3, 0.7, graphics_utils::ColorRGB::new(0., 0.5, 0.5));
+    let red_mat = renderer::Material::new(0.1, 0.9, graphics_utils::ColorRGB::new(1., 0., 0.));
+    let teal_mat = renderer::Material::new(0.1, 0.9, graphics_utils::ColorRGB::new(0., 0.5, 0.5));
 
     let light = renderer::PointLight {
         point: Point3::new(1., 1., 1.),

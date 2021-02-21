@@ -28,7 +28,11 @@ impl Hit {
     Hit {
       t,
       point: ray.index(t),
-      normal: if front_face { outward_normal } else { -outward_normal },
+      normal: if front_face {
+        outward_normal
+      } else {
+        -outward_normal
+      },
       front_face,
     }
   }
@@ -47,7 +51,7 @@ pub fn random_in_unit_sphere() -> Vector3<f64> {
   loop {
     let p = Vector3::new(rng.gen::<f64>(), rng.gen::<f64>(), rng.gen::<f64>());
     if p.norm().powf(2.) < 1. {
-      return p
+      return p;
     }
   }
 }

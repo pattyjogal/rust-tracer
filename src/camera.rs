@@ -56,7 +56,7 @@ impl Camera {
       CameraMode::Orthographic => Ray {
         origin: Point3::from(pixel_world_coords),
         direction: Vector3::new(0., 0., -1.),
-      }
+      },
     }
   }
 }

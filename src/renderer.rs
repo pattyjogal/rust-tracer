@@ -93,10 +93,11 @@ impl RenderedScene {
             // TODO: Only works if default color is black
             let target = hit.point + hit.normal + random_in_unit_sphere();
             // let color = 0.5 * object.color_at_ray_hit(&ray);
-            let color =
-              object
-                .material()
-                .calculate_shade_at_hit(ColorRGB::new(1., 1., 1.), self.light, &hit);
+            let color = object.material().calculate_shade_at_hit(
+              ColorRGB::new(1., 1., 1.),
+              &self.light,
+              &hit,
+            );
             let pixel_val = self.pixel_data[x + y * self.image_width];
             self.pixel_data[x + y * self.image_width] =
               pixel_val + color / self.mj_fine_grid_size.pow(2) as f64
@@ -258,6 +259,7 @@ pub struct PointLight {
   pub color: ColorRGB,
 }
 
+#[derive(Clone, Copy)]
 pub struct Material {
   k_diffuse: f64,
   k_ambient: f64,
@@ -276,7 +278,7 @@ impl Material {
   fn calculate_shade_at_hit(
     &self,
     ambient_color: ColorRGB,
-    light: PointLight,
+    light: &PointLight,
     hit: &Hit,
   ) -> ColorRGB {
     let ambient = self.k_ambient * ambient_color;
