@@ -10,6 +10,8 @@ use png;
 use super::camera::Camera;
 use super::graphics_utils::{random_in_unit_sphere, ColorRGB, Hit, Hittable, Ray};
 
+const EPSILON: f64 = 0.000001;
+
 pub struct RenderedScene {
   aspect_ratio: f64,
   image_height: usize,
@@ -48,7 +50,6 @@ impl RenderedScene {
     let lower_left_corner =
       origin - (horizontal / 2.) - (vertical / 2.) - Vector3::new(0., 0., focal_length);
 
-    println!("{}\n{}\n{}", horizontal, vertical, lower_left_corner);
     let pixel_data: Vec<ColorRGB> = vec![default_color; image_height * image_width];
 
     RenderedScene {
@@ -88,15 +89,15 @@ impl RenderedScene {
         let i_offset = (i as f64 / self.mj_fine_grid_size as f64) / (self.image_width as f64 - 1.);
         let j_offset = (j as f64 / self.mj_fine_grid_size as f64) / (self.image_height as f64 - 1.);
         let ray = self.camera.get_ray(u + i_offset, v + j_offset);
-        match self.hit_objects(&ray, 0., std::f64::INFINITY) {
+        match self.hit_objects(&ray, EPSILON, std::f64::INFINITY) {
           Some((hit, object)) => {
             // TODO: Only works if default color is black
-            let target = hit.point + hit.normal + random_in_unit_sphere();
             // let color = 0.5 * object.color_at_ray_hit(&ray);
-            let color = object.material().calculate_shade_at_hit(
-              ColorRGB::new(1., 1., 1.),
+            let color = object.calculate_shade_at_hit(
+              object.material().color,
               &self.light,
               &hit,
+              &self.objects
             );
             let pixel_val = self.pixel_data[x + y * self.image_width];
             self.pixel_data[x + y * self.image_width] =
@@ -152,7 +153,35 @@ pub trait Colorable {
   fn material(&self) -> &Material;
 }
 
-pub trait Renderable: Colorable + Hittable {}
+pub trait Renderable: Colorable + Hittable {
+  fn calculate_shade_at_hit(
+    &self,
+    ambient_color: ColorRGB,
+    light: &PointLight,
+    hit: &Hit,
+    objects: &Vec<Box<dyn Renderable>>,
+  ) -> ColorRGB {
+    // Calculate shading
+    let ambient = self.material().k_ambient * ambient_color;
+    let diffuse =
+      self.material().k_diffuse * Vector3::from(light.point - hit.point).dot(&hit.normal) * light.color;
+    let shaded_color = self.material().color.component_mul(&(ambient + diffuse));
+    
+    // Calculate shadow
+    let ray_to_light = Ray {
+      origin: hit.point,
+      direction: -1. * Vector3::from(light.point - hit.point),
+    };
+    for object in objects {
+      match object.check_ray_hit(&ray_to_light, EPSILON, std::f64::INFINITY) {
+        Some(hit) => return shaded_color - ColorRGB::new(0.05, 0.05, 0.05),
+        None => {}
+      }
+    }
+
+    shaded_color
+  }
+}
 
 /// Plane
 pub struct Plane {
@@ -253,6 +282,59 @@ impl Colorable for Sphere {
   }
 }
 
+/// Triangle
+pub struct Triangle {
+  pub p0: Point3<f64>,
+  pub p1: Point3<f64>,
+  pub p2: Point3<f64>,
+  pub material: Material,
+}
+
+impl Renderable for Triangle {}
+
+impl Hittable for Triangle {
+  fn check_ray_hit(&self, ray: &Ray, t_min: f64, t_max: f64) -> Option<Hit> {
+    let e1 = Vector3::from(self.p1 - self.p0);
+    let e2 = Vector3::from(self.p2 - self.p0);
+    let h = ray.direction.cross(&e2);
+    let a = e1.dot(&h);
+
+    if a > -EPSILON && a < EPSILON {
+      return None;
+    }
+
+    let f = 1.0 / a;
+    let s = ray.origin - self.p0;
+    let u = f * s.dot(&h);
+    if u < 0. || u > 1. {
+      return None;
+    }
+
+    let q = s.cross(&e1);
+    let v = f * ray.direction.dot(&q);
+    if v < 0. || u + v > 1. {
+      return None;
+    }
+
+    let t = f * e2.dot(&q);
+    if t > EPSILON {
+      return Some(Hit::new(&ray, t, e1.cross(&e2)))
+    }
+
+    None
+  }
+}
+
+impl Colorable for Triangle {
+  fn color_at_ray_hit(&self, ray: &Ray) -> ColorRGB {
+    return ColorRGB::new(0.8, 0.8, 0.8);
+  }
+
+  fn material(&self) -> &Material {
+    &self.material
+  }
+}
+
 // Point Light
 pub struct PointLight {
   pub point: Point3<f64>,
@@ -273,17 +355,5 @@ impl Material {
       k_ambient,
       color,
     }
-  }
-
-  fn calculate_shade_at_hit(
-    &self,
-    ambient_color: ColorRGB,
-    light: &PointLight,
-    hit: &Hit,
-  ) -> ColorRGB {
-    let ambient = self.k_ambient * ambient_color;
-    let diffuse =
-      self.k_diffuse * Vector3::from(light.point - hit.point).dot(&hit.normal) * light.color;
-    self.color.component_mul(&(ambient + diffuse))
   }
 }
