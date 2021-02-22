@@ -8,22 +8,14 @@ use nalgebra::{Point3, Vector3};
 use png;
 
 use super::camera::Camera;
-use super::graphics_utils::{random_in_unit_sphere, ColorRGB, Hit, Hittable, Ray};
+use super::graphics_utils::{ColorRGB, Hit, Hittable, Ray};
 
-const EPSILON: f64 = 0.000001;
+const EPSILON: f64 = 0.001;
 
 pub struct RenderedScene {
-  aspect_ratio: f64,
   image_height: usize,
   image_width: usize,
-  viewport_height: f64,
-  viewport_width: f64,
-  focal_length: f64,
   pixel_data: Vec<ColorRGB>,
-  origin: Vector3<f64>,
-  horizontal: Vector3<f64>,
-  vertical: Vector3<f64>,
-  lower_left_corner: Vector3<f64>,
   objects: Vec<Box<dyn Renderable>>,
   camera: Camera,
   mj_fine_grid_size: usize,
@@ -32,7 +24,6 @@ pub struct RenderedScene {
 
 impl RenderedScene {
   pub fn new(
-    aspect_ratio: f64,
     image_height: usize,
     image_width: usize,
     viewport_height: f64,
@@ -53,17 +44,9 @@ impl RenderedScene {
     let pixel_data: Vec<ColorRGB> = vec![default_color; image_height * image_width];
 
     RenderedScene {
-      aspect_ratio,
       image_height,
       image_width,
-      viewport_height,
-      viewport_width,
-      focal_length,
       pixel_data,
-      origin,
-      horizontal,
-      vertical,
-      lower_left_corner,
       objects,
       camera,
       mj_fine_grid_size,
@@ -174,7 +157,7 @@ pub trait Renderable: Colorable + Hittable {
     };
     for object in objects {
       match object.check_ray_hit(&ray_to_light, EPSILON, std::f64::INFINITY) {
-        Some(hit) => return shaded_color - ColorRGB::new(0.05, 0.05, 0.05),
+        Some(hit) => return shaded_color - ColorRGB::new(0.3, 0.3, 0.3),
         None => {}
       }
     }

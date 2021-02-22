@@ -6,7 +6,7 @@ mod renderer;
 
 // Image
 const ASPECT_RATIO: f64 = 16. / 9.;
-const IMAGE_WIDTH: usize = 400;
+const IMAGE_WIDTH: usize = 1200;
 const IMAGE_HEIGHT: usize = (IMAGE_WIDTH as f64 / ASPECT_RATIO) as usize;
 
 fn main() {
@@ -31,13 +31,13 @@ fn main() {
         graphics_utils::ColorRGB::new(0.99215686274, 0.65490196078, 0.99215686274),
     );
     let gray_mat =
-        renderer::Material::new(0.10, 0.90, graphics_utils::ColorRGB::new(0.1, 0.1, 0.1));
+        renderer::Material::new(0.03, 0.97, graphics_utils::ColorRGB::new(131. / 255., 149. / 255., 167. / 255.));
     let off_gray_mat =
-        renderer::Material::new(0.03, 0.97, graphics_utils::ColorRGB::new(0.5, 0.5, 0.5));
+        renderer::Material::new(0.03, 0.97, graphics_utils::ColorRGB::new(0.25, 0.25, 0.35));
 
     let light = renderer::PointLight {
-        point: Point3::new(2.0, 20.3, 20.5),
-        color: graphics_utils::ColorRGB::new(1., 1., 1.),
+        point: Point3::new(20.0, 20.3, -15.5),
+        color: graphics_utils::ColorRGB::new(0.6, 0.6, 0.6),
     };
 
     let objects: Vec<Box<dyn renderer::Renderable>> = vec![
@@ -63,25 +63,29 @@ fn main() {
         // }),
         Box::new(renderer::Triangle {
             p0: Point3::new(-0.1, 0.0, 2.1),
-            p1: Point3::new(0.1, 0.0, 2.5),
-            p2: Point3::new(-0.07, 1.0, 2.15),
+            p1: Point3::new(0.2, 0.0, 2.5),
+            p2: Point3::new(-0.07, 2.0, 2.15),
             material: red_mat,
         }),
         Box::new(renderer::Triangle {
-            p0: Point3::new(0.2, 0.0, 2.1),
-            p1: Point3::new(0.1, 0.0, 2.5),
-            p2: Point3::new(-0.07, 1.0, 2.15),
+            p0: Point3::new(-0.1, 0.0, 2.1),
+            p1: Point3::new(-0.3, 0.0, 2.5),
+            p2: Point3::new(-0.07, 2.0, 2.15),
             material: red_mat,
         }),
         Box::new(renderer::Sphere {
-            center: Point3::new(0.75, 0.25, 2.0),
+            center: Point3::new(0.65, 0.25, 2.0),
             radius: 0.25,
-            material: renderer::Material::new(0.03, 0.97, graphics_utils::ColorRGB::new(0.25, 1., 0.)),
+            material: renderer::Material::new(0.03, 0.97, graphics_utils::ColorRGB::new(255. / 255., 99. / 255., 72. / 255.)),
+        }),
+        Box::new(renderer::Sphere {
+            center: Point3::new(-1.3, 0.25, 3.7),
+            radius: 0.5,
+            material: renderer::Material::new(0.01, 0.99, graphics_utils::ColorRGB::new(255. / 255., 195. / 255., 18. / 255.)),
         }),
     ];
 
     let mut scene = renderer::RenderedScene::new(
-        ASPECT_RATIO,
         IMAGE_HEIGHT,
         IMAGE_WIDTH,
         viewport_height,
@@ -90,7 +94,7 @@ fn main() {
         graphics_utils::ColorRGB::new(0., 0., 0.),
         objects,
         camera,
-        1,
+        4,
         light,
     );
     scene.render();
