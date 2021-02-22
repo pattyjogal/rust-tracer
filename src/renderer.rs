@@ -170,7 +170,7 @@ pub trait Renderable: Colorable + Hittable {
     // Calculate shadow
     let ray_to_light = Ray {
       origin: hit.point,
-      direction: -1. * Vector3::from(light.point - hit.point),
+      direction: Vector3::from(light.point - hit.point),
     };
     for object in objects {
       match object.check_ray_hit(&ray_to_light, EPSILON, std::f64::INFINITY) {

@@ -31,12 +31,12 @@ fn main() {
         graphics_utils::ColorRGB::new(0.99215686274, 0.65490196078, 0.99215686274),
     );
     let gray_mat =
-        renderer::Material::new(0.9, 0.1, graphics_utils::ColorRGB::new(0.1, 0.1, 0.1));
+        renderer::Material::new(0.10, 0.90, graphics_utils::ColorRGB::new(0.1, 0.1, 0.1));
     let off_gray_mat =
         renderer::Material::new(0.03, 0.97, graphics_utils::ColorRGB::new(0.5, 0.5, 0.5));
 
     let light = renderer::PointLight {
-        point: Point3::new(2.0, 0.3, 2.5),
+        point: Point3::new(2.0, 20.3, 20.5),
         color: graphics_utils::ColorRGB::new(1., 1., 1.),
     };
 
@@ -62,8 +62,14 @@ fn main() {
         //     material: renderer::Material::new(0.03, 0.97, graphics_utils::ColorRGB::new(0., 1., 0.)),
         // }),
         Box::new(renderer::Triangle {
-            p0: Point3::new(-0.1, 0.1, 2.1),
-            p1: Point3::new(0.1, 0.3, 2.5),
+            p0: Point3::new(-0.1, 0.0, 2.1),
+            p1: Point3::new(0.1, 0.0, 2.5),
+            p2: Point3::new(-0.07, 1.0, 2.15),
+            material: red_mat,
+        }),
+        Box::new(renderer::Triangle {
+            p0: Point3::new(0.2, 0.0, 2.1),
+            p1: Point3::new(0.1, 0.0, 2.5),
             p2: Point3::new(-0.07, 1.0, 2.15),
             material: red_mat,
         }),
