@@ -66,12 +66,6 @@ impl RenderedScene {
     let u = (x as f64) / (self.image_width as f64 - 1.);
     let v = (y as f64) / (self.image_height as f64 - 1.);
 
-    if (x == 20 && y == 22) {
-      let mut abc = 2;
-      abc = 5 + 6;
-      println!("{}", abc);
-    }
-
     // Multi-Jittered sampling
     for i in 0..self.mj_fine_grid_size {
       for j in 0..self.mj_fine_grid_size {
