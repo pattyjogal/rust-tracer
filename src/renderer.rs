@@ -4,11 +4,11 @@ use std::io::BufWriter;
 use std::path::Path;
 use std::vec::Vec;
 
-use nalgebra::{Point3, Vector3};
+use nalgebra::{Point3, Vector3, distance};
 use png;
 
 use super::camera::Camera;
-use super::graphics_utils::{ColorRGB, Hit, Hittable, Ray};
+use super::graphics_utils::{unit_vector, ColorRGB, Hit, Hittable, Ray};
 
 const EPSILON: f64 = 0.001;
 
@@ -66,6 +66,12 @@ impl RenderedScene {
     let u = (x as f64) / (self.image_width as f64 - 1.);
     let v = (y as f64) / (self.image_height as f64 - 1.);
 
+    if (x == 20 && y == 22) {
+      let mut abc = 2;
+      abc = 5 + 6;
+      println!("{}", abc);
+    }
+
     // Multi-Jittered sampling
     for i in 0..self.mj_fine_grid_size {
       for j in 0..self.mj_fine_grid_size {
@@ -80,7 +86,7 @@ impl RenderedScene {
               object.material().color,
               &self.light,
               &hit,
-              &self.objects
+              &self.objects,
             );
             let pixel_val = self.pixel_data[x + y * self.image_width];
             self.pixel_data[x + y * self.image_width] =
@@ -146,17 +152,18 @@ pub trait Renderable: Colorable + Hittable {
   ) -> ColorRGB {
     // Calculate shading
     let ambient = self.material().k_ambient * ambient_color;
-    let diffuse =
-      self.material().k_diffuse * Vector3::from(light.point - hit.point).dot(&hit.normal) * light.color;
+    let diffuse = self.material().k_diffuse
+      * Vector3::from(light.point - hit.point).dot(&hit.normal)
+      * light.color;
     let shaded_color = self.material().color.component_mul(&(ambient + diffuse));
-    
+
     // Calculate shadow
     let ray_to_light = Ray {
       origin: hit.point,
       direction: Vector3::from(light.point - hit.point),
     };
     for object in objects {
-      match object.check_ray_hit(&ray_to_light, EPSILON, std::f64::INFINITY) {
+      match object.check_ray_hit(&ray_to_light, 0.00015, 1.0) {
         Some(hit) => return shaded_color - ColorRGB::new(0.3, 0.3, 0.3),
         None => {}
       }
@@ -225,6 +232,10 @@ impl Hittable for Sphere {
       return None;
     }
     let sqrtd = discriminant.sqrt();
+
+    if distance(&ray.origin, &self.center) < self.radius {
+      return None;
+    }
 
     // Find nearest root in acceptable range
     let translated_origin = ray.origin - self.center;
@@ -301,7 +312,7 @@ impl Hittable for Triangle {
 
     let t = f * e2.dot(&q);
     if t > EPSILON {
-      return Some(Hit::new(&ray, t, e1.cross(&e2)))
+      return Some(Hit::new(&ray, t, e1.cross(&e2)));
     }
 
     None

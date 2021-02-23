@@ -6,7 +6,7 @@ mod renderer;
 
 // Image
 const ASPECT_RATIO: f64 = 16. / 9.;
-const IMAGE_WIDTH: usize = 1200;
+const IMAGE_WIDTH: usize = 500;
 const IMAGE_HEIGHT: usize = (IMAGE_WIDTH as f64 / ASPECT_RATIO) as usize;
 
 fn main() {
@@ -76,11 +76,16 @@ fn main() {
         Box::new(renderer::Sphere {
             center: Point3::new(0.65, 0.25, 2.0),
             radius: 0.25,
-            material: renderer::Material::new(0.03, 0.97, graphics_utils::ColorRGB::new(255. / 255., 99. / 255., 72. / 255.)),
+            material: renderer::Material::new(0.01, 0.99, graphics_utils::ColorRGB::new(255. / 255., 99. / 255., 72. / 255.)),
         }),
         Box::new(renderer::Sphere {
             center: Point3::new(-1.3, 0.25, 3.7),
             radius: 0.5,
+            material: renderer::Material::new(0.01, 0.99, graphics_utils::ColorRGB::new(255. / 255., 195. / 255., 18. / 255.)),
+        }),
+        Box::new(renderer::Sphere {
+            center: Point3::new(-4.3, 0.0, 10.7),
+            radius: 3.0,
             material: renderer::Material::new(0.01, 0.99, graphics_utils::ColorRGB::new(255. / 255., 195. / 255., 18. / 255.)),
         }),
     ];
@@ -94,7 +99,7 @@ fn main() {
         graphics_utils::ColorRGB::new(0., 0., 0.),
         objects,
         camera,
-        4,
+        1,
         light,
     );
     scene.render();
