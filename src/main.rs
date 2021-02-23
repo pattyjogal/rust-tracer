@@ -10,11 +10,6 @@ const IMAGE_WIDTH: usize = 400;
 const IMAGE_HEIGHT: usize = (IMAGE_WIDTH as f64 / ASPECT_RATIO) as usize;
 
 fn main() {
-    let viewport_height = 2.0;
-    let viewport_width = ASPECT_RATIO * viewport_height;
-    let focal_length = 1.0;
-    println!("Image height: {}", IMAGE_HEIGHT);
-
     // Render
     let camera = camera::Camera::new(
         Point3::new(0., 0.25, 0.),

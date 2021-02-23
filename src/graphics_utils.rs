@@ -1,5 +1,4 @@
 use nalgebra::{Point3, Vector3};
-use rand::Rng;
 
 pub type ColorRGB = Vector3<f64>;
 

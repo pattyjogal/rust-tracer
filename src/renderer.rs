@@ -83,9 +83,11 @@ impl RenderedScene {
   /// `x` - The horizontal coordinate of the pixel, where left is `0`
   /// `y` - The vertical coordinate of the pixel, where bottom is `0`
   fn render_pixel(&mut self, x: usize, y: usize) {
+    // Adjusted viewplane world-coordinates
     let u = (x as f64) / (self.image_width as f64 - 1.);
     let v = (y as f64) / (self.image_height as f64 - 1.);
 
+    // Sets to determine constraints of MJS
     let mut used_rows = HashSet::<usize>::new();
     let mut used_cols = HashSet::<usize>::new();
     let mut used_squares = HashSet::<(usize, usize)>::new();
@@ -101,6 +103,7 @@ impl RenderedScene {
           continue;
         }
 
+        // The current MJ subgrid index pair
         let square = (
           i / (self.mj_fine_grid_size as f64).sqrt() as usize,
           j / (self.mj_fine_grid_size as f64).sqrt() as usize,
@@ -113,13 +116,14 @@ impl RenderedScene {
         used_cols.insert(j);
         used_squares.insert(square);
 
+        // The subpixel offset for the chosen MJ square
         let i_offset = (i as f64 / self.mj_fine_grid_size as f64) / (self.image_width as f64 - 1.);
         let j_offset = (j as f64 / self.mj_fine_grid_size as f64) / (self.image_height as f64 - 1.);
+
         let ray = self.camera.get_ray(u + i_offset, v + j_offset);
         match self.hit_objects(&ray, EPSILON, std::f64::INFINITY) {
           Some((hit, object)) => {
-            // TODO: Only works if default color is black
-            // let color = 0.5 * object.color_at_ray_hit(&ray);
+            // TODO: Only works for now if default color is black
             let color = object.calculate_shade_at_hit(
               object.material().color,
               &self.light,
@@ -180,11 +184,13 @@ impl RenderedScene {
     let file = File::create(path)?;
     let ref mut w = BufWriter::new(&file);
 
+    // Create the PNG encoder
     let mut encoder = png::Encoder::new(w, self.image_width as u32, self.image_height as u32);
     encoder.set_color(png::ColorType::RGB);
     encoder.set_depth(png::BitDepth::Eight);
     let mut writer = encoder.write_header()?;
 
+    // Translate the color data to byte values
     let data = self
       .pixel_data
       .iter()
@@ -254,8 +260,11 @@ pub trait Renderable: Colorable + Hittable {
 
 /// Plane
 pub struct Plane {
+  /// A point that lies on the plane
   pub point: Point3<f64>,
+  /// A normal vector for the plane
   pub normal: Vector3<f64>,
+  /// The material used to shade the plane
   pub material: Material,
 }
 
@@ -282,8 +291,11 @@ impl Colorable for Plane {
 
 /// Sphere
 pub struct Sphere {
+  /// The center point of the sphere
   pub center: Point3<f64>,
+  /// The radius of the sphere
   pub radius: f64,
+  /// The material used to shade the sphere
   pub material: Material,
 }
 
@@ -315,6 +327,7 @@ impl Hittable for Sphere {
     }
     let sqrtd = discriminant.sqrt();
 
+    // Disallow a hit starting from within the sphere
     if distance(&ray.origin, &self.center) < self.radius {
       return None;
     }
@@ -324,6 +337,7 @@ impl Hittable for Sphere {
     let a = ray.direction.dot(&ray.direction);
     let hb = translated_origin.dot(&ray.direction);
 
+    // Check both roots to see if a hit occurred at all
     let mut root = (-hb - sqrtd) / a;
     if root < t_min || t_max < root {
       root = (-hb + sqrtd) / a;
@@ -335,7 +349,6 @@ impl Hittable for Sphere {
     let point = ray.index(root);
     let outward_normal = (point - self.center) / self.radius;
 
-    // TODO: Maybe move Hit to Ray?
     Some(Hit::new(ray, root, outward_normal))
   }
 }
@@ -348,9 +361,13 @@ impl Colorable for Sphere {
 
 /// Triangle
 pub struct Triangle {
+  /// The first vertex
   pub p0: Point3<f64>,
+  /// The second vertex
   pub p1: Point3<f64>,
+  /// The third vertex
   pub p2: Point3<f64>,
+  /// The material used to shade the triangle
   pub material: Material,
 }
 
@@ -381,7 +398,7 @@ impl Hittable for Triangle {
     }
 
     let t = f * e2.dot(&q);
-    if t > EPSILON && t > t_min && t < t_max {
+    if t > t_min && t < t_max {
       return Some(Hit::new(&ray, t, e1.cross(&e2)));
     }
 
@@ -395,16 +412,22 @@ impl Colorable for Triangle {
   }
 }
 
-// Point Light
+/// A light that shines isotropically from a point
 pub struct PointLight {
+  /// The location of the light
   pub point: Point3<f64>,
+  /// The light's color
   pub color: ColorRGB,
 }
 
+/// A representation of the object's shading parameters
 #[derive(Clone, Copy)]
 pub struct Material {
+  /// Diffuse constant term from Phong equation
   k_diffuse: f64,
+  /// Ambient constant term from Phone equation
   k_ambient: f64,
+  /// The color of the material
   color: ColorRGB,
 }
 
