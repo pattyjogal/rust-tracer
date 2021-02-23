@@ -64,7 +64,7 @@ pub trait Hittable {
   /// Determines if a ray hit the hittable object between the range of `t`s
   /// 
   /// # Arguments
-  /// `ray` - A reference to the ray being checked
+  /// `ray` - A reference to the ray used to intersect
   /// `t_min` - The minimum time along the ray to check
   /// `t_max` - The maximum time along the ray to check
   /// 

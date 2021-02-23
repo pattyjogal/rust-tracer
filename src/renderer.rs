@@ -1,46 +1,60 @@
+use std::collections::HashSet;
 use std::fs::File;
 use std::io;
 use std::io::BufWriter;
 use std::path::Path;
 use std::vec::Vec;
 
-use nalgebra::{Point3, Vector3, distance};
+use nalgebra::{distance, Point3, Vector3};
 use png;
 
 use super::camera::Camera;
-use super::graphics_utils::{unit_vector, ColorRGB, Hit, Hittable, Ray};
+use super::graphics_utils::{ColorRGB, Hit, Hittable, Ray};
 
+/// A small value to offset some ray origins in calculations
 const EPSILON: f64 = 0.001;
 
+/// A representation of a 3D space
 pub struct RenderedScene {
+  /// The output screen's height in pixels
   image_height: usize,
+  /// The output screen's width in pixels
   image_width: usize,
+  /// A single-dimensional vector of pixel colors, flattened on rows 
   pixel_data: Vec<ColorRGB>,
+  /// A vector containing all the renderable objects in the scene
   objects: Vec<Box<dyn Renderable>>,
+  /// The camera used to look into the scene
   camera: Camera,
+  /// The size of the fine multi-jittered grid (where the coarse grid is the square root of this number)
   mj_fine_grid_size: usize,
+  /// A point light to illuminate the scene
   light: PointLight,
 }
 
 impl RenderedScene {
+  /// Constructs a rendered scene
+  /// 
+  /// # Arguments
+  /// `image_height` - The height of the output image in pixels
+  /// `image_width` - The width of the output image in pixels
+  /// `default_color` - The color to show in the background when no object is hit by a ray
+  /// `objects` - A collection of objects to display in the scene
+  /// `camera` - The camera used to generate the render of the scene
+  /// `mj_find_grid_size` - The side length of the fine grid used in Multi-Jittered Sampling
+  /// `light` - A point light to illuminate the scene
+  /// 
+  /// # Returns
+  /// An initialized scene
   pub fn new(
     image_height: usize,
     image_width: usize,
-    viewport_height: f64,
-    viewport_width: f64,
-    focal_length: f64,
     default_color: ColorRGB,
     objects: Vec<Box<dyn Renderable>>,
     camera: Camera,
     mj_fine_grid_size: usize,
     light: PointLight,
   ) -> Self {
-    let origin = Vector3::new(0., 0., 0.);
-    let horizontal = Vector3::new(viewport_width, 0., 0.);
-    let vertical = Vector3::new(0., viewport_height, 0.);
-    let lower_left_corner =
-      origin - (horizontal / 2.) - (vertical / 2.) - Vector3::new(0., 0., focal_length);
-
     let pixel_data: Vec<ColorRGB> = vec![default_color; image_height * image_width];
 
     RenderedScene {
@@ -54,6 +68,7 @@ impl RenderedScene {
     }
   }
 
+  /// Computes the colors at each pixel, storing them for exporting
   pub fn render(&mut self) {
     for j in 0..self.image_height {
       for i in 0..self.image_width {
@@ -62,13 +77,42 @@ impl RenderedScene {
     }
   }
 
+  /// Determines the color of a single pixel and stores it in the scene's rendered output
+  /// 
+  /// # Arguments
+  /// `x` - The horizontal coordinate of the pixel, where left is `0`
+  /// `y` - The vertical coordinate of the pixel, where bottom is `0`
   fn render_pixel(&mut self, x: usize, y: usize) {
     let u = (x as f64) / (self.image_width as f64 - 1.);
     let v = (y as f64) / (self.image_height as f64 - 1.);
 
+    let mut used_rows = HashSet::<usize>::new();
+    let mut used_cols = HashSet::<usize>::new();
+    let mut used_squares = HashSet::<(usize, usize)>::new();
+
     // Multi-Jittered sampling
     for i in 0..self.mj_fine_grid_size {
+      if used_rows.contains(&i) {
+        continue;
+      }
+
       for j in 0..self.mj_fine_grid_size {
+        if used_cols.contains(&j) {
+          continue;
+        }
+
+        let square = (
+          i / (self.mj_fine_grid_size as f64).sqrt() as usize,
+          j / (self.mj_fine_grid_size as f64).sqrt() as usize,
+        );
+        if used_squares.contains(&square) {
+          continue;
+        }
+
+        used_rows.insert(i);
+        used_cols.insert(j);
+        used_squares.insert(square);
+
         let i_offset = (i as f64 / self.mj_fine_grid_size as f64) / (self.image_width as f64 - 1.);
         let j_offset = (j as f64 / self.mj_fine_grid_size as f64) / (self.image_height as f64 - 1.);
         let ray = self.camera.get_ray(u + i_offset, v + j_offset);
@@ -84,7 +128,7 @@ impl RenderedScene {
             );
             let pixel_val = self.pixel_data[x + y * self.image_width];
             self.pixel_data[x + y * self.image_width] =
-              pixel_val + color / self.mj_fine_grid_size.pow(2) as f64
+              pixel_val + color / self.mj_fine_grid_size as f64
           }
           None => {}
         }
@@ -92,6 +136,15 @@ impl RenderedScene {
     }
   }
 
+  /// Given a ray and a range of times along the ray, attempts to find the closest object that ray hits, if any
+  /// 
+  /// # Arguments
+  /// `ray` - A reference to the ray used to hit the objects
+  /// `t_min` - The minimum time along the ray to check
+  /// `t_max` - The maxumum time along the ray to check
+  /// 
+  /// # Returns
+  /// A possible pairing of a hit record and the closest object that was hit
   fn hit_objects(&self, ray: &Ray, t_min: f64, t_max: f64) -> Option<(Hit, &Box<dyn Renderable>)> {
     let mut possible_obj_hit: Option<(Hit, &Box<dyn Renderable>)> = None;
     let mut closest_so_far = t_max;
@@ -109,6 +162,19 @@ impl RenderedScene {
     possible_obj_hit
   }
 
+  /// Writes the stored pixel data out to a PNG image
+  /// 
+  /// Must be called after `RenderedScene::render()`
+  /// 
+  /// # Arguments
+  /// `filename` - The filepath to write the image to
+  /// 
+  /// # Returns
+  /// The result of the image-wiriting operation
+  /// 
+  /// # Errors
+  /// Produces an error type if there were any I/O issues while
+  /// attempting to write to the given file
   pub fn export_to_png(&self, filename: &str) -> Result<(), io::Error> {
     let path = Path::new(filename);
     let file = File::create(path)?;
@@ -131,12 +197,31 @@ impl RenderedScene {
   }
 }
 
+/// Objects that can produce a color when hit by a ray
 pub trait Colorable {
-  fn color_at_ray_hit(&self, hit: &Ray) -> ColorRGB;
+  /// A getter for the object's material
+  /// 
+  /// # Returns
+  /// A reference to the object's material
   fn material(&self) -> &Material;
 }
 
+/// Objects that can be shown in the scene
+/// 
+/// Must be both `Colorable` and `Hittable`, as items need to be
+/// detected and properly colored in to be shown
 pub trait Renderable: Colorable + Hittable {
+  /// Given that a ray has intersected this object, compute the exact shade that the
+  /// object's material will show. Factors in shadows and shading.
+  /// 
+  /// # Arguments
+  /// `ambient_color` - The color used for the ambient term in the Phong equation
+  /// `light` - The light to use for checking shading and shadows
+  /// `hit` - The ray hit record that produced this color
+  /// `objects` - The objects in the scene that can product a shadow against this object
+  /// 
+  /// # Returns
+  /// The color shown at this hit point
   fn calculate_shade_at_hit(
     &self,
     ambient_color: ColorRGB,
@@ -157,8 +242,8 @@ pub trait Renderable: Colorable + Hittable {
       direction: Vector3::from(light.point - hit.point),
     };
     for object in objects {
-      match object.check_ray_hit(&ray_to_light, 0.00015, 1.0) {
-        Some(hit) => return shaded_color - ColorRGB::new(0.3, 0.3, 0.3),
+      match object.check_ray_hit(&ray_to_light, 0.015, 1.0) {
+        Some(_hit) => return shaded_color - ColorRGB::new(0.3, 0.3, 0.3),
         None => {}
       }
     }
@@ -190,10 +275,6 @@ impl Hittable for Plane {
 }
 
 impl Colorable for Plane {
-  fn color_at_ray_hit(&self, ray: &Ray) -> ColorRGB {
-    return ColorRGB::new(0.8, 0.8, 0.8);
-  }
-
   fn material(&self) -> &Material {
     &self.material
   }
@@ -207,6 +288,13 @@ pub struct Sphere {
 }
 
 impl Sphere {
+  /// Helper to calculate the discriminant for root-finding in the sphere
+  /// 
+  /// # Arguments 
+  /// `ray` - The reference ray to use for calculating the discriminant
+  /// 
+  /// # Returns
+  /// The discriminant
   fn calc_discriminant(&self, ray: &Ray) -> f64 {
     let translated_origin = ray.origin - self.center;
     let a = ray.direction.dot(&ray.direction);
@@ -253,18 +341,6 @@ impl Hittable for Sphere {
 }
 
 impl Colorable for Sphere {
-  fn color_at_ray_hit(&self, ray: &Ray) -> ColorRGB {
-    let translated_origin = ray.origin - self.center;
-    let discriminant = self.calc_discriminant(&ray);
-    let a = ray.direction.dot(&ray.direction);
-    let b = 2.0 * translated_origin.dot(&ray.direction);
-    let t = (-b - discriminant.sqrt()) / (2.0 * a);
-
-    let z_scaled = ray.index(t) - Vector3::new(0., 0., -1.);
-    let n = z_scaled / z_scaled.coords.norm();
-    0.5 * ColorRGB::new(n.x + 1., n.y + 1., n.z + 1.)
-  }
-
   fn material(&self) -> &Material {
     &self.material
   }
@@ -305,7 +381,7 @@ impl Hittable for Triangle {
     }
 
     let t = f * e2.dot(&q);
-    if t > EPSILON {
+    if t > EPSILON && t > t_min && t < t_max {
       return Some(Hit::new(&ray, t, e1.cross(&e2)));
     }
 
@@ -314,10 +390,6 @@ impl Hittable for Triangle {
 }
 
 impl Colorable for Triangle {
-  fn color_at_ray_hit(&self, ray: &Ray) -> ColorRGB {
-    return ColorRGB::new(0.8, 0.8, 0.8);
-  }
-
   fn material(&self) -> &Material {
     &self.material
   }
