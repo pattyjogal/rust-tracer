@@ -9,7 +9,7 @@ use nalgebra::{distance, Point3, Vector3};
 use png;
 
 use super::camera::Camera;
-use super::graphics_utils::{ColorRGB, Hit, Hittable, Ray};
+use super::graphics_utils::{AxisAlignedBoundingBox, ColorRGB, Hit, Hittable, Ray};
 
 /// A small value to offset some ray origins in calculations
 const EPSILON: f64 = 0.001;
@@ -20,7 +20,7 @@ pub struct RenderedScene {
   image_height: usize,
   /// The output screen's width in pixels
   image_width: usize,
-  /// A single-dimensional vector of pixel colors, flattened on rows 
+  /// A single-dimensional vector of pixel colors, flattened on rows
   pixel_data: Vec<ColorRGB>,
   /// A vector containing all the renderable objects in the scene
   objects: Vec<Box<dyn Renderable>>,
@@ -34,7 +34,7 @@ pub struct RenderedScene {
 
 impl RenderedScene {
   /// Constructs a rendered scene
-  /// 
+  ///
   /// # Arguments
   /// `image_height` - The height of the output image in pixels
   /// `image_width` - The width of the output image in pixels
@@ -43,7 +43,7 @@ impl RenderedScene {
   /// `camera` - The camera used to generate the render of the scene
   /// `mj_find_grid_size` - The side length of the fine grid used in Multi-Jittered Sampling
   /// `light` - A point light to illuminate the scene
-  /// 
+  ///
   /// # Returns
   /// An initialized scene
   pub fn new(
@@ -78,7 +78,7 @@ impl RenderedScene {
   }
 
   /// Determines the color of a single pixel and stores it in the scene's rendered output
-  /// 
+  ///
   /// # Arguments
   /// `x` - The horizontal coordinate of the pixel, where left is `0`
   /// `y` - The vertical coordinate of the pixel, where bottom is `0`
@@ -141,12 +141,12 @@ impl RenderedScene {
   }
 
   /// Given a ray and a range of times along the ray, attempts to find the closest object that ray hits, if any
-  /// 
+  ///
   /// # Arguments
   /// `ray` - A reference to the ray used to hit the objects
   /// `t_min` - The minimum time along the ray to check
   /// `t_max` - The maxumum time along the ray to check
-  /// 
+  ///
   /// # Returns
   /// A possible pairing of a hit record and the closest object that was hit
   fn hit_objects(&self, ray: &Ray, t_min: f64, t_max: f64) -> Option<(Hit, &Box<dyn Renderable>)> {
@@ -167,15 +167,15 @@ impl RenderedScene {
   }
 
   /// Writes the stored pixel data out to a PNG image
-  /// 
+  ///
   /// Must be called after `RenderedScene::render()`
-  /// 
+  ///
   /// # Arguments
   /// `filename` - The filepath to write the image to
-  /// 
+  ///
   /// # Returns
   /// The result of the image-wiriting operation
-  /// 
+  ///
   /// # Errors
   /// Produces an error type if there were any I/O issues while
   /// attempting to write to the given file
@@ -206,26 +206,26 @@ impl RenderedScene {
 /// Objects that can produce a color when hit by a ray
 pub trait Colorable {
   /// A getter for the object's material
-  /// 
+  ///
   /// # Returns
   /// A reference to the object's material
   fn material(&self) -> &Material;
 }
 
 /// Objects that can be shown in the scene
-/// 
+///
 /// Must be both `Colorable` and `Hittable`, as items need to be
 /// detected and properly colored in to be shown
 pub trait Renderable: Colorable + Hittable {
   /// Given that a ray has intersected this object, compute the exact shade that the
   /// object's material will show. Factors in shadows and shading.
-  /// 
+  ///
   /// # Arguments
   /// `ambient_color` - The color used for the ambient term in the Phong equation
   /// `light` - The light to use for checking shading and shadows
   /// `hit` - The ray hit record that produced this color
   /// `objects` - The objects in the scene that can product a shadow against this object
-  /// 
+  ///
   /// # Returns
   /// The color shown at this hit point
   fn calculate_shade_at_hit(
@@ -281,6 +281,10 @@ impl Hittable for Plane {
       Some(Hit::new(ray, t, self.normal))
     }
   }
+
+  fn get_bounding_box(&self, _: f64, _: f64) -> Option<AxisAlignedBoundingBox> {
+    None
+  }
 }
 
 impl Colorable for Plane {
@@ -301,10 +305,10 @@ pub struct Sphere {
 
 impl Sphere {
   /// Helper to calculate the discriminant for root-finding in the sphere
-  /// 
-  /// # Arguments 
+  ///
+  /// # Arguments
   /// `ray` - The reference ray to use for calculating the discriminant
-  /// 
+  ///
   /// # Returns
   /// The discriminant
   fn calc_discriminant(&self, ray: &Ray) -> f64 {
@@ -350,6 +354,13 @@ impl Hittable for Sphere {
     let outward_normal = (point - self.center) / self.radius;
 
     Some(Hit::new(ray, root, outward_normal))
+  }
+
+  fn get_bounding_box(&self, _: f64, _: f64) -> Option<AxisAlignedBoundingBox> {
+    Some(AxisAlignedBoundingBox::new(
+      self.center - Vector3::new(self.radius, self.radius, self.radius),
+      self.center + Vector3::new(self.radius, self.radius, self.radius),
+    ))
   }
 }
 
@@ -402,6 +413,9 @@ impl Hittable for Triangle {
       return Some(Hit::new(&ray, t, e1.cross(&e2)));
     }
 
+    None
+  }
+  fn get_bounding_box(&self, _: f64, _: f64) -> Option<AxisAlignedBoundingBox> {
     None
   }
 }
