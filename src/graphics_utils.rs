@@ -1,4 +1,6 @@
 use nalgebra::{Point3, Vector3};
+use float_ord::FloatOrd;
+
 use std::mem::swap;
 
 pub type ColorRGB = Vector3<f64>;
@@ -85,6 +87,7 @@ pub trait Hittable {
   fn get_bounding_box(&self, t_start: f64, t_end: f64) -> Option<AxisAlignedBoundingBox>;
 }
 
+#[derive(Copy, Clone)]
 pub struct AxisAlignedBoundingBox {
   start: Point3<f64>,
   end: Point3<f64>,
@@ -116,8 +119,20 @@ impl AxisAlignedBoundingBox {
   }
 }
 
-pub fn compute_surrounding_box(first: AxisAlignedBoundingBox, second: AxisAlignedBoundingBox) -> AxisAlignedBoundingBox {
-  unimplemented!();
+pub fn compute_surrounding_box(first: &AxisAlignedBoundingBox, second: &AxisAlignedBoundingBox) -> AxisAlignedBoundingBox {
+  let small = Point3::new(
+    first.start.x.min(second.start.x),
+    first.start.y.min(second.start.y),
+    first.start.z.min(second.start.z),
+  );
+
+  let big = Point3::new(
+    first.start.x.max(second.start.x),
+    first.start.y.max(second.start.y),
+    first.start.z.max(second.start.z),
+  );
+
+  AxisAlignedBoundingBox::new(small, big)
 }
 
 /// Computes a vector with magnitude 1 from another vector
