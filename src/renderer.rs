@@ -9,7 +9,9 @@ use nalgebra::{distance, Point3, Vector3};
 use png;
 
 use super::camera::Camera;
-use super::graphics_utils::{AxisAlignedBoundingBox, ColorRGB, Hit, Hittable, Ray};
+use super::graphics_utils::{
+  compute_surrounding_box, AxisAlignedBoundingBox, ColorRGB, Hit, Hittable, Ray,
+};
 
 /// A small value to offset some ray origins in calculations
 const EPSILON: f64 = 0.001;
@@ -200,6 +202,24 @@ impl RenderedScene {
     writer.write_image_data(&data[..])?;
 
     Ok(())
+  }
+
+  fn get_bounding_box(&self, start_time: f64, end_time: f64) -> Option<AxisAlignedBoundingBox> {
+    let mut possible_output_box = None;
+
+    for object in &self.objects {
+      match object.get_bounding_box(start_time, end_time) {
+        Some(iter_box) => {
+          possible_output_box = match possible_output_box {
+            Some(output_box) => Some(compute_surrounding_box(&output_box, &iter_box)),
+            None => Some(iter_box),
+          }
+        }
+        None => {}
+      }
+    }
+
+    possible_output_box
   }
 }
 
@@ -452,5 +472,39 @@ impl Material {
       k_ambient,
       color,
     }
+  }
+}
+
+struct BVHNode {
+  bounding_box: AxisAlignedBoundingBox,
+  left_child: Box<dyn Hittable>,
+  right_child: Box<dyn Hittable>,
+}
+
+impl BVHNode {
+  fn new(objects: Vec<Box<dyn Renderable>>, start: usize, end: usize) -> BVHNode {
+    
+  }
+}
+
+impl Hittable for BVHNode {
+  fn check_ray_hit(&self, ray: &Ray, t_min: f64, t_max: f64) -> Option<Hit> {
+    if !self.bounding_box.check_ray_hit(ray, t_min, t_max) {
+      return None
+    }
+
+    if let Some(hit) = self.left_child.check_ray_hit(ray, t_min, t_max) {
+      return Some(hit)
+    }
+
+    if let Some(hit) = self.right_child.check_ray_hit(ray, t_min, t_max) {
+      return Some(hit)
+    }
+
+    None
+  }
+
+  fn get_bounding_box(&self, _: f64, _: f64) -> Option<AxisAlignedBoundingBox> {
+    Some(self.bounding_box)
   }
 }
