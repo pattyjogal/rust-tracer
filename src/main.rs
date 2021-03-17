@@ -1,5 +1,7 @@
 use nalgebra::{Point3, Vector3};
 
+use std::rc::Rc;
+
 mod camera;
 mod graphics_utils;
 mod renderer;
@@ -38,33 +40,33 @@ fn main() {
         color: graphics_utils::ColorRGB::new(0.6, 0.6, 0.6),
     };
 
-    let objects: Vec<Box<dyn renderer::Renderable>> = vec![
-        Box::new(renderer::Plane {
+    let objects: Vec<Rc<dyn renderer::Renderable>> = vec![
+        Rc::new(renderer::Plane {
             point: Point3::new(0., 0., 0.),
             normal: Vector3::new(0., 1., 0.),
             material: gray_mat,
         }),
         // Large pink pyramid
-        Box::new(renderer::Triangle {
+        Rc::new(renderer::Triangle {
             p0: Point3::new(-0.1, 0.0, 2.1),
             p1: Point3::new(0.2, 0.0, 2.5),
             p2: Point3::new(-0.07, 2.0, 2.15),
             material: red_mat,
         }),
-        Box::new(renderer::Triangle {
+        Rc::new(renderer::Triangle {
             p0: Point3::new(-0.1, 0.0, 2.1),
             p1: Point3::new(-0.3, 0.0, 2.5),
             p2: Point3::new(-0.07, 2.0, 2.15),
             material: red_mat,
         }),
-        Box::new(renderer::Triangle {
+        Rc::new(renderer::Triangle {
             p1: Point3::new(0.2, 0.0, 2.5),
             p0: Point3::new(-0.3, 0.0, 2.5),
             p2: Point3::new(-0.07, 2.0, 2.15),
             material: red_mat,
         }),
         // Small red sphere
-        Box::new(renderer::Sphere {
+        Rc::new(renderer::Sphere {
             center: Point3::new(0.65, 0.25, 2.0),
             radius: 0.25,
             material: renderer::Material::new(
@@ -74,7 +76,7 @@ fn main() {
             ),
         }),
         // Large orange sphere
-        Box::new(renderer::Sphere {
+        Rc::new(renderer::Sphere {
             center: Point3::new(-1.3, 0.25, 3.7),
             radius: 0.5,
             material: renderer::Material::new(
@@ -84,13 +86,13 @@ fn main() {
             ),
         }),
         // Small navy blue pyramid
-        Box::new(renderer::Triangle {
+        Rc::new(renderer::Triangle {
             p0: Point3::new(-0.3, 0.0, 1.4),
             p1: Point3::new(-0.4, 0.0, 1.5),
             p2: Point3::new(-0.35, 0.25, 1.45),
             material: off_gray_mat,
         }),
-        Box::new(renderer::Triangle {
+        Rc::new(renderer::Triangle {
             p0: Point3::new(-0.3, 0.0, 1.4),
             p1: Point3::new(-0.165, 0.0, 1.44),
             p2: Point3::new(-0.35, 0.25, 1.45),

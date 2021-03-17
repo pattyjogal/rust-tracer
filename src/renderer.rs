@@ -4,8 +4,10 @@ use std::io;
 use std::io::BufWriter;
 use std::path::Path;
 use std::vec::Vec;
+use std::rc::Rc;
 
 use nalgebra::{distance, Point3, Vector3};
+use rand::Rng;
 use png;
 
 use super::camera::Camera;
@@ -25,7 +27,7 @@ pub struct RenderedScene {
   /// A single-dimensional vector of pixel colors, flattened on rows
   pixel_data: Vec<ColorRGB>,
   /// A vector containing all the renderable objects in the scene
-  objects: Vec<Box<dyn Renderable>>,
+  objects: Vec<Rc<dyn Renderable>>,
   /// The camera used to look into the scene
   camera: Camera,
   /// The size of the fine multi-jittered grid (where the coarse grid is the square root of this number)
@@ -52,7 +54,7 @@ impl RenderedScene {
     image_height: usize,
     image_width: usize,
     default_color: ColorRGB,
-    objects: Vec<Box<dyn Renderable>>,
+    objects: Vec<Rc<dyn Renderable>>,
     camera: Camera,
     mj_fine_grid_size: usize,
     light: PointLight,
@@ -151,8 +153,8 @@ impl RenderedScene {
   ///
   /// # Returns
   /// A possible pairing of a hit record and the closest object that was hit
-  fn hit_objects(&self, ray: &Ray, t_min: f64, t_max: f64) -> Option<(Hit, &Box<dyn Renderable>)> {
-    let mut possible_obj_hit: Option<(Hit, &Box<dyn Renderable>)> = None;
+  fn hit_objects(&self, ray: &Ray, t_min: f64, t_max: f64) -> Option<(Hit, &Rc<dyn Renderable>)> {
+    let mut possible_obj_hit: Option<(Hit, &Rc<dyn Renderable>)> = None;
     let mut closest_so_far = t_max;
 
     for object in &self.objects {
@@ -253,7 +255,7 @@ pub trait Renderable: Colorable + Hittable {
     ambient_color: ColorRGB,
     light: &PointLight,
     hit: &Hit,
-    objects: &Vec<Box<dyn Renderable>>,
+    objects: &Vec<Rc<dyn Renderable>>,
   ) -> ColorRGB {
     // Calculate shading
     let ambient = self.material().k_ambient * ambient_color;
@@ -477,13 +479,57 @@ impl Material {
 
 struct BVHNode {
   bounding_box: AxisAlignedBoundingBox,
-  left_child: Box<dyn Hittable>,
-  right_child: Box<dyn Hittable>,
+  left_child: Rc<dyn Hittable>,
+  right_child: Rc<dyn Hittable>,
+}
+
+fn compare_boxes(a: &Rc<dyn Hittable>, b: &Rc<dyn Hittable>, axis: usize) -> bool {
+  match (a.get_bounding_box(0., 0.), b.get_bounding_box(0., 0.)) {
+    (Some(a_box), Some(b_box)) => a_box.start[axis] < b_box.start[axis],
+    _ => false
+  }
 }
 
 impl BVHNode {
-  fn new(objects: Vec<Box<dyn Renderable>>, start: usize, end: usize) -> BVHNode {
-    
+  fn new(raw_objects: &Vec<Rc<dyn Hittable>>, start: usize, end: usize) -> BVHNode {
+    let mut rng = rand::thread_rng();
+    let axis = rng.gen_range(0..=2);
+    let comparator = |a, b| { compare_boxes(a, b, axis) };
+    let object_span = end - start;
+    let mut objects = raw_objects.to_vec();
+    let left;
+    let right;
+
+    match object_span {
+      1 => {
+        left = objects[start].clone();
+        right = objects[start].clone();
+      },
+      2 => {
+        if comparator(&objects[start], &objects[start + 1]) {
+          left = objects[start].clone();
+          right = objects[start + 1].clone();
+        } else {
+          left = objects[start + 1].clone();
+          right = objects[start].clone();
+        }
+      }
+      _ => {
+        objects.sort_by(|a, b| { if compare_boxes(a, b, axis) { std::cmp::Ordering::Less } else { std::cmp::Ordering::Greater } });
+        let mid = start + object_span / 2;
+        left = Rc::new(BVHNode::new(&objects, start, mid));
+        right = Rc::new(BVHNode::new(&objects, mid, end));
+      }
+    }
+
+    let left_box = left.get_bounding_box(0., 0.).expect("Attempted to make BVH with unboundable object");
+    let right_box = right.get_bounding_box(0., 0.).expect("Attempted to make BVH with unboundable object");
+
+    BVHNode {
+      bounding_box: compute_surrounding_box(&left_box, &right_box),
+      left_child: left,
+      right_child: right,
+    }
   }
 }
 

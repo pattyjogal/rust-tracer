@@ -89,8 +89,8 @@ pub trait Hittable {
 
 #[derive(Copy, Clone)]
 pub struct AxisAlignedBoundingBox {
-  start: Point3<f64>,
-  end: Point3<f64>,
+  pub start: Point3<f64>,
+  pub end: Point3<f64>,
 }
 
 impl AxisAlignedBoundingBox {
