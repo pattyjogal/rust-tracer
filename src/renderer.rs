@@ -5,6 +5,7 @@ use std::io::BufWriter;
 use std::path::Path;
 use std::rc::Rc;
 use std::vec::Vec;
+use std::time::Instant;
 
 use nalgebra::{distance, Point3, Vector3};
 use png;
@@ -93,11 +94,13 @@ impl RenderedScene {
 
   /// Computes the colors at each pixel, storing them for exporting
   pub fn render(&mut self) {
-    for j in 0..self.image_height {
-      for i in 0..self.image_width {
+    let now = Instant::now();
+    for i in 0..self.image_width {
+      for j in 0..self.image_height {
         self.render_pixel(i, j);
       }
     }
+    println!("Raycasting time: {}s", now.elapsed().as_secs())
   }
 
   /// Determines the color of a single pixel and stores it in the scene's rendered output
@@ -144,7 +147,10 @@ impl RenderedScene {
         let j_offset = (j as f64 / self.mj_fine_grid_size as f64) / (self.image_height as f64 - 1.);
 
         let ray = self.camera.get_ray(u + i_offset, v + j_offset);
-        match self.hit_objects(&ray, EPSILON, std::f64::INFINITY) {
+        let now = Instant::now();
+        let hit_objects = self.hit_objects(&ray, EPSILON, std::f64::INFINITY);
+        println!("Raycasting time: {}us", now.elapsed().as_micros());
+        match hit_objects  {
           Some((hit, object)) => {
             // TODO: Only works for now if default color is black
             let color = object.calculate_shade_at_hit(
@@ -222,6 +228,7 @@ impl RenderedScene {
   /// Produces an error type if there were any I/O issues while
   /// attempting to write to the given file
   pub fn export_to_png(&self, filename: &str) -> Result<(), io::Error> {
+    println!("Exporting...");
     let path = Path::new(filename);
     let file = File::create(path)?;
     let ref mut w = BufWriter::new(&file);
@@ -611,14 +618,17 @@ impl BVHNode {
     }
 
     let left = self.left_child.check_ray_hit(ray, t_min, t_max);
-    let right = self.right_child.check_ray_hit(ray, t_min, t_max);
 
     if left.is_some() {
       return match self.left_child.node_type() {
         NodeType::Node(node) => node.get_intersected_object(ray, t_min, t_max),
         NodeType::Primitive => Some(&self.left_child),
       };
-    } else if right.is_some() {
+    }
+
+    let right = self.right_child.check_ray_hit(ray, t_min, t_max);
+
+    if right.is_some() {
       return match self.right_child.node_type() {
         NodeType::Node(node) => node.get_intersected_object(ray, t_min, t_max),
         NodeType::Primitive => Some(&self.right_child),

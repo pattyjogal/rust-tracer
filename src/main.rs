@@ -166,7 +166,7 @@ fn main() {
         IMAGE_WIDTH,
         graphics_utils::ColorRGB::new(0., 0., 0.),
         // objects,
-        generate_spheres_in_box(4000, 0.05, Point3::new(-1., -1., 2.), Point3::new(1., 1., 3.)),
+        generate_spheres_in_box(200, 0.05, Point3::new(-1., -1., 2.), Point3::new(1., 1., 3.)),
         camera,
         1,
         light,
