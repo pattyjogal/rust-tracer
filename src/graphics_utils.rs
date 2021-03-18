@@ -1,7 +1,8 @@
-use nalgebra::{Point3, Vector3};
 use float_ord::FloatOrd;
+use nalgebra::{Point3, Vector3};
 
 use std::mem::swap;
+use std::rc::Rc;
 
 pub type ColorRGB = Vector3<f64>;
 
@@ -26,7 +27,7 @@ impl Ray {
   }
 }
 
-pub struct Hit {
+pub struct Hit<'a> {
   /// The time along the ray where the hit occurred
   pub t: f64,
   /// The point of contact with the ray and the object
@@ -35,9 +36,10 @@ pub struct Hit {
   pub normal: Vector3<f64>,
   /// Whether or not the normal is facing out
   pub front_face: bool,
+  pub hittable: &'a dyn Hittable,
 }
 
-impl Hit {
+impl<'a> Hit<'a> {
   /// Constructs a hit from ray-intersection information
   ///
   /// # Arguments
@@ -47,7 +49,12 @@ impl Hit {
   ///
   /// # Returns
   /// The constructed hit object
-  pub fn new(ray: &Ray, t: f64, outward_normal: Vector3<f64>) -> Hit {
+  pub fn new(
+    ray: &Ray,
+    t: f64,
+    outward_normal: Vector3<f64>,
+    hittable: &'a dyn Hittable,
+  ) -> Hit<'a> {
     let front_face = ray.direction.dot(&outward_normal) < 0.;
 
     Hit {
@@ -59,6 +66,7 @@ impl Hit {
         -outward_normal
       },
       front_face,
+      hittable,
     }
   }
 }
@@ -87,7 +95,7 @@ pub trait Hittable {
   fn get_bounding_box(&self, t_start: f64, t_end: f64) -> Option<AxisAlignedBoundingBox>;
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct AxisAlignedBoundingBox {
   pub start: Point3<f64>,
   pub end: Point3<f64>,
@@ -119,7 +127,10 @@ impl AxisAlignedBoundingBox {
   }
 }
 
-pub fn compute_surrounding_box(first: &AxisAlignedBoundingBox, second: &AxisAlignedBoundingBox) -> AxisAlignedBoundingBox {
+pub fn compute_surrounding_box(
+  first: &AxisAlignedBoundingBox,
+  second: &AxisAlignedBoundingBox,
+) -> AxisAlignedBoundingBox {
   let small = Point3::new(
     first.start.x.min(second.start.x),
     first.start.y.min(second.start.y),
@@ -127,9 +138,9 @@ pub fn compute_surrounding_box(first: &AxisAlignedBoundingBox, second: &AxisAlig
   );
 
   let big = Point3::new(
-    first.start.x.max(second.start.x),
-    first.start.y.max(second.start.y),
-    first.start.z.max(second.start.z),
+    first.end.x.max(second.end.x),
+    first.end.y.max(second.end.y),
+    first.end.z.max(second.end.z),
   );
 
   AxisAlignedBoundingBox::new(small, big)

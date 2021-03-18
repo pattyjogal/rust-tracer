@@ -3,12 +3,12 @@ use std::fs::File;
 use std::io;
 use std::io::BufWriter;
 use std::path::Path;
-use std::vec::Vec;
 use std::rc::Rc;
+use std::vec::Vec;
 
 use nalgebra::{distance, Point3, Vector3};
-use rand::Rng;
 use png;
+use rand::Rng;
 
 use super::camera::Camera;
 use super::graphics_utils::{
@@ -17,6 +17,16 @@ use super::graphics_utils::{
 
 /// A small value to offset some ray origins in calculations
 const EPSILON: f64 = 0.001;
+
+pub enum HitDetectionMode {
+  Naive,
+  Bvh,
+}
+
+pub enum NodeType<'a> {
+  Node(&'a BVHNode),
+  Primitive,
+}
 
 /// A representation of a 3D space
 pub struct RenderedScene {
@@ -34,6 +44,8 @@ pub struct RenderedScene {
   mj_fine_grid_size: usize,
   /// A point light to illuminate the scene
   light: PointLight,
+  hit_detection_mode: HitDetectionMode,
+  root_bvh_node: Option<BVHNode>,
 }
 
 impl RenderedScene {
@@ -58,8 +70,13 @@ impl RenderedScene {
     camera: Camera,
     mj_fine_grid_size: usize,
     light: PointLight,
+    hit_detection_mode: HitDetectionMode,
   ) -> Self {
     let pixel_data: Vec<ColorRGB> = vec![default_color; image_height * image_width];
+    let root_bvh_node = match &hit_detection_mode {
+      HitDetectionMode::Bvh => Some(BVHNode::new(&objects, 0, objects.len())),
+      _ => None,
+    };
 
     RenderedScene {
       image_height,
@@ -69,6 +86,8 @@ impl RenderedScene {
       camera,
       mj_fine_grid_size,
       light,
+      hit_detection_mode,
+      root_bvh_node,
     }
   }
 
@@ -154,20 +173,39 @@ impl RenderedScene {
   /// # Returns
   /// A possible pairing of a hit record and the closest object that was hit
   fn hit_objects(&self, ray: &Ray, t_min: f64, t_max: f64) -> Option<(Hit, &Rc<dyn Renderable>)> {
-    let mut possible_obj_hit: Option<(Hit, &Rc<dyn Renderable>)> = None;
-    let mut closest_so_far = t_max;
-
-    for object in &self.objects {
-      match object.check_ray_hit(ray, t_min, closest_so_far) {
-        Some(hit) => {
-          closest_so_far = hit.t;
-          possible_obj_hit = Some((hit, object));
+    match self.hit_detection_mode {
+      HitDetectionMode::Naive => {
+        let mut possible_obj_hit: Option<(Hit, &Rc<dyn Renderable>)> = None;
+        let mut closest_so_far = t_max;
+        for object in &self.objects {
+          match object.check_ray_hit(ray, t_min, closest_so_far) {
+            Some(hit) => {
+              closest_so_far = hit.t;
+              possible_obj_hit = Some((hit, object));
+            }
+            None => {}
+          }
         }
-        None => {}
+        possible_obj_hit
       }
+      HitDetectionMode::Bvh => match self
+        .root_bvh_node
+        .as_ref()
+        .unwrap()
+        .check_ray_hit(ray, t_min, t_max)
+      {
+        Some(hit) => Some((
+          hit,
+          &self
+            .root_bvh_node
+            .as_ref()
+            .unwrap()
+            .get_intersected_object(ray, t_min, t_max)
+            .unwrap(),
+        )),
+        None => None,
+      },
     }
-
-    possible_obj_hit
   }
 
   /// Writes the stored pixel data out to a PNG image
@@ -278,6 +316,8 @@ pub trait Renderable: Colorable + Hittable {
 
     shaded_color
   }
+
+  fn node_type(&self) -> NodeType;
 }
 
 /// Plane
@@ -290,8 +330,6 @@ pub struct Plane {
   pub material: Material,
 }
 
-impl Renderable for Plane {}
-
 impl Hittable for Plane {
   fn check_ray_hit(&self, ray: &Ray, t_min: f64, t_max: f64) -> Option<Hit> {
     let Ray { origin, direction } = ray;
@@ -300,7 +338,7 @@ impl Hittable for Plane {
     if t.is_nan() || t < t_min || t > t_max {
       None
     } else {
-      Some(Hit::new(ray, t, self.normal))
+      Some(Hit::new(ray, t, self.normal, self))
     }
   }
 
@@ -312,6 +350,12 @@ impl Hittable for Plane {
 impl Colorable for Plane {
   fn material(&self) -> &Material {
     &self.material
+  }
+}
+
+impl Renderable for Plane {
+  fn node_type(&self) -> NodeType {
+    NodeType::Primitive
   }
 }
 
@@ -343,8 +387,6 @@ impl Sphere {
   }
 }
 
-impl Renderable for Sphere {}
-
 impl Hittable for Sphere {
   fn check_ray_hit(&self, ray: &Ray, t_min: f64, t_max: f64) -> Option<Hit> {
     let discriminant = self.calc_discriminant(ray);
@@ -375,7 +417,7 @@ impl Hittable for Sphere {
     let point = ray.index(root);
     let outward_normal = (point - self.center) / self.radius;
 
-    Some(Hit::new(ray, root, outward_normal))
+    Some(Hit::new(ray, root, outward_normal, self))
   }
 
   fn get_bounding_box(&self, _: f64, _: f64) -> Option<AxisAlignedBoundingBox> {
@@ -392,6 +434,12 @@ impl Colorable for Sphere {
   }
 }
 
+impl Renderable for Sphere {
+  fn node_type(&self) -> NodeType {
+    NodeType::Primitive
+  }
+}
+
 /// Triangle
 pub struct Triangle {
   /// The first vertex
@@ -403,8 +451,6 @@ pub struct Triangle {
   /// The material used to shade the triangle
   pub material: Material,
 }
-
-impl Renderable for Triangle {}
 
 impl Hittable for Triangle {
   fn check_ray_hit(&self, ray: &Ray, t_min: f64, t_max: f64) -> Option<Hit> {
@@ -432,7 +478,7 @@ impl Hittable for Triangle {
 
     let t = f * e2.dot(&q);
     if t > t_min && t < t_max {
-      return Some(Hit::new(&ray, t, e1.cross(&e2)));
+      return Some(Hit::new(&ray, t, e1.cross(&e2), self));
     }
 
     None
@@ -445,6 +491,12 @@ impl Hittable for Triangle {
 impl Colorable for Triangle {
   fn material(&self) -> &Material {
     &self.material
+  }
+}
+
+impl Renderable for Triangle {
+  fn node_type(&self) -> NodeType {
+    NodeType::Primitive
   }
 }
 
@@ -479,22 +531,23 @@ impl Material {
 
 struct BVHNode {
   bounding_box: AxisAlignedBoundingBox,
-  left_child: Rc<dyn Hittable>,
-  right_child: Rc<dyn Hittable>,
+  left_child: Rc<dyn Renderable>,
+  right_child: Rc<dyn Renderable>,
+  dummy_material: Material,
 }
 
-fn compare_boxes(a: &Rc<dyn Hittable>, b: &Rc<dyn Hittable>, axis: usize) -> bool {
+fn compare_boxes(a: &Rc<dyn Renderable>, b: &Rc<dyn Renderable>, axis: usize) -> bool {
   match (a.get_bounding_box(0., 0.), b.get_bounding_box(0., 0.)) {
     (Some(a_box), Some(b_box)) => a_box.start[axis] < b_box.start[axis],
-    _ => false
+    _ => false,
   }
 }
 
 impl BVHNode {
-  fn new(raw_objects: &Vec<Rc<dyn Hittable>>, start: usize, end: usize) -> BVHNode {
+  fn new(raw_objects: &Vec<Rc<dyn Renderable>>, start: usize, end: usize) -> BVHNode {
     let mut rng = rand::thread_rng();
     let axis = rng.gen_range(0..=2);
-    let comparator = |a, b| { compare_boxes(a, b, axis) };
+    let comparator = |a, b| compare_boxes(a, b, axis);
     let object_span = end - start;
     let mut objects = raw_objects.to_vec();
     let left;
@@ -504,7 +557,7 @@ impl BVHNode {
       1 => {
         left = objects[start].clone();
         right = objects[start].clone();
-      },
+      }
       2 => {
         if comparator(&objects[start], &objects[start + 1]) {
           left = objects[start].clone();
@@ -515,36 +568,61 @@ impl BVHNode {
         }
       }
       _ => {
-        objects.sort_by(|a, b| { if compare_boxes(a, b, axis) { std::cmp::Ordering::Less } else { std::cmp::Ordering::Greater } });
+        objects.sort_by(|a, b| {
+          if compare_boxes(a, b, axis) {
+            std::cmp::Ordering::Less
+          } else {
+            std::cmp::Ordering::Greater
+          }
+        });
         let mid = start + object_span / 2;
         left = Rc::new(BVHNode::new(&objects, start, mid));
         right = Rc::new(BVHNode::new(&objects, mid, end));
       }
     }
 
-    let left_box = left.get_bounding_box(0., 0.).expect("Attempted to make BVH with unboundable object");
-    let right_box = right.get_bounding_box(0., 0.).expect("Attempted to make BVH with unboundable object");
+    let left_box = left
+      .get_bounding_box(0., 0.)
+      .expect("Attempted to make BVH with unboundable object");
+    let right_box = right
+      .get_bounding_box(0., 0.)
+      .expect("Attempted to make BVH with unboundable object");
 
     BVHNode {
       bounding_box: compute_surrounding_box(&left_box, &right_box),
       left_child: left,
       right_child: right,
+      dummy_material: Material {
+        color: ColorRGB::new(0., 0., 0.),
+        k_ambient: 0.,
+        k_diffuse: 0.,
+      },
     }
   }
-}
 
-impl Hittable for BVHNode {
-  fn check_ray_hit(&self, ray: &Ray, t_min: f64, t_max: f64) -> Option<Hit> {
+  fn get_intersected_object(
+    &self,
+    ray: &Ray,
+    t_min: f64,
+    t_max: f64,
+  ) -> Option<&Rc<dyn Renderable>> {
     if !self.bounding_box.check_ray_hit(ray, t_min, t_max) {
-      return None
+      return None;
     }
 
-    if let Some(hit) = self.left_child.check_ray_hit(ray, t_min, t_max) {
-      return Some(hit)
-    }
+    let left = self.left_child.check_ray_hit(ray, t_min, t_max);
+    let right = self.right_child.check_ray_hit(ray, t_min, t_max);
 
-    if let Some(hit) = self.right_child.check_ray_hit(ray, t_min, t_max) {
-      return Some(hit)
+    if left.is_some() {
+      return match self.left_child.node_type() {
+        NodeType::Node(node) => node.get_intersected_object(ray, t_min, t_max),
+        NodeType::Primitive => Some(&self.left_child),
+      };
+    } else if right.is_some() {
+      return match self.right_child.node_type() {
+        NodeType::Node(node) => node.get_intersected_object(ray, t_min, t_max),
+        NodeType::Primitive => Some(&self.right_child),
+      };
     }
 
     None
@@ -552,5 +630,47 @@ impl Hittable for BVHNode {
 
   fn get_bounding_box(&self, _: f64, _: f64) -> Option<AxisAlignedBoundingBox> {
     Some(self.bounding_box)
+  }
+}
+
+impl Hittable for BVHNode {
+  fn check_ray_hit(&self, ray: &Ray, t_min: f64, t_max: f64) -> Option<Hit> {
+    if !self.bounding_box.check_ray_hit(ray, t_min, t_max) {
+      return None;
+    }
+
+    if let Some(hit) = self.left_child.check_ray_hit(ray, t_min, t_max) {
+      return Some(hit);
+    }
+
+    if let Some(hit) = self.right_child.check_ray_hit(ray, t_min, t_max) {
+      return Some(hit);
+    }
+
+    None
+  }
+
+  fn get_bounding_box(&self, _: f64, _: f64) -> Option<AxisAlignedBoundingBox> {
+    Some(self.bounding_box)
+  }
+}
+
+// TODO: This is dumb, but because I can't convert Vec<&Renderable> -> Vec<&Hittable>,
+// I have to make this into a "colorable" object
+impl Colorable for BVHNode {
+  fn material(&self) -> &Material {
+    &self.dummy_material
+  }
+}
+
+impl Renderable for BVHNode {
+  fn node_type(&self) -> NodeType {
+    NodeType::Node(self)
+  }
+}
+
+impl std::fmt::Debug for BVHNode {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
+    f.write_str(&format!("[\n{:?}\n]", self.bounding_box))
   }
 }
