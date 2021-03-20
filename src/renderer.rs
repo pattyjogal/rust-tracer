@@ -4,8 +4,8 @@ use std::io;
 use std::io::BufWriter;
 use std::path::Path;
 use std::rc::Rc;
-use std::vec::Vec;
 use std::time::Instant;
+use std::vec::Vec;
 
 use nalgebra::{distance, Point3, Vector3};
 use png;
@@ -100,7 +100,6 @@ impl RenderedScene {
         self.render_pixel(i, j);
       }
     }
-    println!("Raycasting time: {}s", now.elapsed().as_secs())
   }
 
   /// Determines the color of a single pixel and stores it in the scene's rendered output
@@ -149,12 +148,11 @@ impl RenderedScene {
         let ray = self.camera.get_ray(u + i_offset, v + j_offset);
         let now = Instant::now();
         let hit_objects = self.hit_objects(&ray, EPSILON, std::f64::INFINITY);
-        println!("Raycasting time: {}us", now.elapsed().as_micros());
-        match hit_objects  {
+        match hit_objects {
           Some((hit, object)) => {
             // TODO: Only works for now if default color is black
             let color = object.calculate_shade_at_hit(
-              object.material().color,
+              &object.material().color,
               &self.light,
               &hit,
               &self.objects,
@@ -198,17 +196,9 @@ impl RenderedScene {
         .root_bvh_node
         .as_ref()
         .unwrap()
-        .check_ray_hit(ray, t_min, t_max)
+        .get_intersected_object(ray, t_min, t_max)
       {
-        Some(hit) => Some((
-          hit,
-          &self
-            .root_bvh_node
-            .as_ref()
-            .unwrap()
-            .get_intersected_object(ray, t_min, t_max)
-            .unwrap(),
-        )),
+        Some(object) => Some((Hit::new(ray, 0., Vector3::new(0., 0., 0.)), object)),
         None => None,
       },
     }
@@ -297,7 +287,7 @@ pub trait Renderable: Colorable + Hittable {
   /// The color shown at this hit point
   fn calculate_shade_at_hit(
     &self,
-    ambient_color: ColorRGB,
+    ambient_color: &ColorRGB,
     light: &PointLight,
     hit: &Hit,
     objects: &Vec<Rc<dyn Renderable>>,
@@ -310,16 +300,18 @@ pub trait Renderable: Colorable + Hittable {
     let shaded_color = self.material().color.component_mul(&(ambient + diffuse));
 
     // Calculate shadow
-    let ray_to_light = Ray {
-      origin: hit.point,
-      direction: Vector3::from(light.point - hit.point),
-    };
-    for object in objects {
-      match object.check_ray_hit(&ray_to_light, 0.015, 1.0) {
-        Some(_hit) => return shaded_color - ColorRGB::new(0.3, 0.3, 0.3),
-        None => {}
-      }
-    }
+    // let ray_to_light = Ray {
+    //   origin: hit.point,
+    //   direction: Vector3::from(light.point - hit.point),
+    // };
+
+    // TODO: Maybe this slows it a bit?
+    // for object in objects {
+    //   match object.check_ray_hit(&ray_to_light, 0.015, 1.0) {
+    //     Some(_hit) => return shaded_color - ColorRGB::new(0.3, 0.3, 0.3),
+    //     None => {}
+    //   }
+    // }
 
     shaded_color
   }
@@ -345,7 +337,7 @@ impl Hittable for Plane {
     if t.is_nan() || t < t_min || t > t_max {
       None
     } else {
-      Some(Hit::new(ray, t, self.normal, self))
+      Some(Hit::new(ray, t, self.normal))
     }
   }
 
@@ -424,7 +416,7 @@ impl Hittable for Sphere {
     let point = ray.index(root);
     let outward_normal = (point - self.center) / self.radius;
 
-    Some(Hit::new(ray, root, outward_normal, self))
+    Some(Hit::new(ray, root, outward_normal))
   }
 
   fn get_bounding_box(&self, _: f64, _: f64) -> Option<AxisAlignedBoundingBox> {
@@ -485,7 +477,7 @@ impl Hittable for Triangle {
 
     let t = f * e2.dot(&q);
     if t > t_min && t < t_max {
-      return Some(Hit::new(&ray, t, e1.cross(&e2), self));
+      return Some(Hit::new(&ray, t, e1.cross(&e2)));
     }
 
     None
@@ -617,22 +609,28 @@ impl BVHNode {
       return None;
     }
 
-    let left = self.left_child.check_ray_hit(ray, t_min, t_max);
+    let left_res = match self.left_child.node_type() {
+      NodeType::Node(node) => node.get_intersected_object(ray, t_min, t_max),
+      NodeType::Primitive => match self.left_child.check_ray_hit(ray, t_min, t_max) {
+        Some(_) => Some(&self.left_child),
+        None => None,
+      },
+    };
 
-    if left.is_some() {
-      return match self.left_child.node_type() {
-        NodeType::Node(node) => node.get_intersected_object(ray, t_min, t_max),
-        NodeType::Primitive => Some(&self.left_child),
-      };
+    if left_res.is_some() {
+      return left_res;
     }
 
-    let right = self.right_child.check_ray_hit(ray, t_min, t_max);
+    let right_res = match self.right_child.node_type() {
+      NodeType::Node(node) => node.get_intersected_object(ray, t_min, t_max),
+      NodeType::Primitive => match self.right_child.check_ray_hit(ray, t_min, t_max) {
+        Some(_) => Some(&self.right_child),
+        None => None,
+      },
+    };
 
-    if right.is_some() {
-      return match self.right_child.node_type() {
-        NodeType::Node(node) => node.get_intersected_object(ray, t_min, t_max),
-        NodeType::Primitive => Some(&self.right_child),
-      };
+    if right_res.is_some() {
+      return right_res;
     }
 
     None

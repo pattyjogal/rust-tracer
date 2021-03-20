@@ -27,7 +27,7 @@ impl Ray {
   }
 }
 
-pub struct Hit<'a> {
+pub struct Hit {
   /// The time along the ray where the hit occurred
   pub t: f64,
   /// The point of contact with the ray and the object
@@ -36,10 +36,9 @@ pub struct Hit<'a> {
   pub normal: Vector3<f64>,
   /// Whether or not the normal is facing out
   pub front_face: bool,
-  pub hittable: &'a dyn Hittable,
 }
 
-impl<'a> Hit<'a> {
+impl Hit {
   /// Constructs a hit from ray-intersection information
   ///
   /// # Arguments
@@ -53,8 +52,7 @@ impl<'a> Hit<'a> {
     ray: &Ray,
     t: f64,
     outward_normal: Vector3<f64>,
-    hittable: &'a dyn Hittable,
-  ) -> Hit<'a> {
+  ) -> Hit {
     let front_face = ray.direction.dot(&outward_normal) < 0.;
 
     Hit {
@@ -66,7 +64,6 @@ impl<'a> Hit<'a> {
         -outward_normal
       },
       front_face,
-      hittable,
     }
   }
 }
