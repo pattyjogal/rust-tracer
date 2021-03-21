@@ -10,6 +10,7 @@ use std::vec::Vec;
 use nalgebra::{distance, Point3, Vector3};
 use png;
 use rand::Rng;
+use tobj;
 
 use super::camera::Camera;
 use super::graphics_utils::{
@@ -483,7 +484,22 @@ impl Hittable for Triangle {
     None
   }
   fn get_bounding_box(&self, _: f64, _: f64) -> Option<AxisAlignedBoundingBox> {
-    None
+    let xs = vec![self.p0.x, self.p1.x, self.p2.x];
+    let ys = vec![self.p0.y, self.p1.y, self.p2.y];
+    let zs = vec![self.p0.z, self.p1.z, self.p2.z];
+
+    Some(AxisAlignedBoundingBox {
+      start: Point3::new(
+        xs.iter().cloned().fold(0. / 0., f64::min),
+        ys.iter().cloned().fold(0. / 0., f64::min),
+        zs.iter().cloned().fold(0. / 0., f64::min),
+      ),
+      end: Point3::new(
+        xs.iter().cloned().fold(0. / 0., f64::max),
+        ys.iter().cloned().fold(0. / 0., f64::max),
+        zs.iter().cloned().fold(0. / 0., f64::max),
+      ),
+    })
   }
 }
 
@@ -680,5 +696,95 @@ impl Renderable for BVHNode {
 impl std::fmt::Debug for BVHNode {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
     f.write_str(&format!("[\n{:?}\n]", self.bounding_box))
+  }
+}
+
+pub struct Mesh {
+  triangles: Vec<Triangle>,
+}
+
+impl Mesh {
+  pub fn from_obj(filename: &str) -> Result<Self, tobj::LoadError> {
+    let (models, _materials) = tobj::load_obj(filename, false)?;
+    match models.first() {
+      Some(model) => {
+        let mesh = &model.mesh;
+        let mut triangles = vec![];
+        let mut next_face = 0;
+
+        for f in 0..mesh.num_face_indices.len() {
+          let end = next_face + mesh.num_face_indices[f] as usize;
+          let face_indices: Vec<_> = mesh.indices[next_face..end].iter().collect();
+          next_face = end;
+
+          triangles.push(Triangle {
+            p0: convert_vertices_to_point(&mesh.positions, *face_indices[0] as usize * 3),
+            p1: convert_vertices_to_point(&mesh.positions, *face_indices[1] as usize * 3) ,
+            p2: convert_vertices_to_point(&mesh.positions, *face_indices[2] as usize * 3),
+            material: Material {
+              color: ColorRGB::new(0., 1., 1.),
+              k_ambient: 0.40,
+              k_diffuse: 0.60,
+            },
+          });
+        }
+
+        Ok(Mesh { triangles })
+      }
+      None => Err(tobj::LoadError::GenericFailure),
+    }
+  }
+}
+
+fn convert_vertices_to_point(positions: &Vec<f32>, i: usize) -> Point3<f64> {
+  Point3::new(
+    positions[i].into(),
+    positions[i + 1].into(),
+    positions[i + 2].into(),
+  )
+}
+
+impl Renderable for Mesh {
+  fn node_type(&self) -> NodeType {
+    NodeType::Primitive
+  }
+}
+
+impl Colorable for Mesh {
+  fn material(&self) -> &Material {
+    self.triangles.first().unwrap().material()
+  }
+}
+
+impl Hittable for Mesh {
+  fn check_ray_hit(&self, ray: &Ray, t_min: f64, t_max: f64) -> Option<Hit> {
+    for triangle in &self.triangles {
+      if let Some(hit) = triangle.check_ray_hit(ray, t_min, t_max) {
+        return Some(hit);
+      }
+    }
+
+    None
+  }
+
+  fn get_bounding_box(&self, t_start: f64, t_end: f64) -> Option<AxisAlignedBoundingBox> {
+    if self.triangles.is_empty() {
+      return None;
+    }
+
+    let mut bounding_box = self
+      .triangles
+      .first()
+      .unwrap()
+      .get_bounding_box(t_start, t_end)
+      .unwrap();
+    for triangle in &self.triangles[1..] {
+      bounding_box = compute_surrounding_box(
+        &bounding_box,
+        &triangle.get_bounding_box(t_start, t_end).unwrap(),
+      )
+    }
+
+    Some(bounding_box)
   }
 }

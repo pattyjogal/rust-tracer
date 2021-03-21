@@ -36,6 +36,11 @@ fn generate_spheres_in_box(
     ret
 }
 
+fn generate_mesh(filename: &str) -> Vec<Rc<dyn renderer::Renderable>> {
+    let mesh = renderer::Mesh::from_obj(filename).expect("Could not load file");
+    vec![Rc::new(mesh)]
+}
+
 fn random_point_in_box(start: Point3<f64>, end: Point3<f64>) -> Point3<f64> {
     let mut rng = rand::thread_rng();
     Point3::new(
@@ -48,9 +53,9 @@ fn random_point_in_box(start: Point3<f64>, end: Point3<f64>) -> Point3<f64> {
 fn main() {
     // Render
     let camera = camera::Camera::new(
-        Point3::new(0., 0., 0.),
-        Point3::new(0., 0., 100000.),
-        Vector3::new(0., 1., 0.),
+        Point3::new(-15., 0., 10.),
+        Point3::new(0., 0., 10.),
+        Vector3::new(0., 0., -1.),
         45.,
         ASPECT_RATIO,
         camera::CameraMode::Perspective,
@@ -70,7 +75,7 @@ fn main() {
         renderer::Material::new(0.03, 0.97, graphics_utils::ColorRGB::new(0.25, 0.25, 0.35));
 
     let light = renderer::PointLight {
-        point: Point3::new(20.0, 20.3, -15.5),
+        point: Point3::new(0., 1., -40.),
         color: graphics_utils::ColorRGB::new(0.6, 0.6, 0.6),
     };
 
@@ -110,33 +115,33 @@ fn main() {
         //     ),
         // }),
         // Large orange sphere
-        Rc::new(renderer::Sphere {
-            center: Point3::new(0., 0., 3.),
-            radius: 0.5,
-            material: renderer::Material::new(
-                0.01,
-                0.99,
-                graphics_utils::ColorRGB::new(255. / 255., 195. / 255., 18. / 255.),
-            ),
-        }),
-        Rc::new(renderer::Sphere {
-            center: Point3::new(1., 0., 3.),
-            radius: 0.5,
-            material: renderer::Material::new(
-                0.01,
-                0.99,
-                graphics_utils::ColorRGB::new(255. / 255., 195. / 255., 18. / 255.),
-            ),
-        }),
-        Rc::new(renderer::Sphere {
-            center: Point3::new(-1., 0., 3.),
-            radius: 0.5,
-            material: renderer::Material::new(
-                0.01,
-                0.99,
-                graphics_utils::ColorRGB::new(255. / 255., 195. / 255., 18. / 255.),
-            ),
-        }),
+        // Rc::new(renderer::Sphere {
+        //     center: Point3::new(0., 0., 3.),
+        //     radius: 0.5,
+        //     material: renderer::Material::new(
+        //         0.01,
+        //         0.99,
+        //         graphics_utils::ColorRGB::new(255. / 255., 195. / 255., 18. / 255.),
+        //     ),
+        // }),
+        // Rc::new(renderer::Sphere {
+        //     center: Point3::new(1., 0., 3.),
+        //     radius: 0.5,
+        //     material: renderer::Material::new(
+        //         0.01,
+        //         0.99,
+        //         graphics_utils::ColorRGB::new(255. / 255., 195. / 255., 18. / 255.),
+        //     ),
+        // }),
+        // Rc::new(renderer::Sphere {
+        //     center: Point3::new(-1., 0., 3.),
+        //     radius: 0.5,
+        //     material: renderer::Material::new(
+        //         0.01,
+        //         0.99,
+        //         graphics_utils::ColorRGB::new(255. / 255., 195. / 255., 18. / 255.),
+        //     ),
+        // }),
         // Rc::new(renderer::Sphere {
         //     center: Point3::new(0., 0., -3.),
         //     radius: 0.5,
@@ -147,12 +152,12 @@ fn main() {
         //     ),
         // }),
         // Small navy blue pyramid
-        // Rc::new(renderer::Triangle {
-        //     p0: Point3::new(-0.3, 0.0, 1.4),
-        //     p1: Point3::new(-0.4, 0.0, 1.5),
-        //     p2: Point3::new(-0.35, 0.25, 1.45),
-        //     material: off_gray_mat,
-        // }),
+        Rc::new(renderer::Triangle {
+            p0: Point3::new(1., 1., 1.),
+            p1: Point3::new(1., 1.0, 1.5),
+            p2: Point3::new(-0.35, 0.25, 1.45),
+            material: off_gray_mat,
+        }),
         // Rc::new(renderer::Triangle {
         //     p0: Point3::new(-0.3, 0.0, 1.4),
         //     p1: Point3::new(-0.165, 0.0, 1.44),
@@ -166,7 +171,8 @@ fn main() {
         IMAGE_WIDTH,
         graphics_utils::ColorRGB::new(0., 0., 0.),
         // objects,
-        generate_spheres_in_box(1000, 0.05, Point3::new(-1., -1., 2.), Point3::new(1., 1., 3.)),
+        // generate_spheres_in_box(10000, 0.05, Point3::new(-1., -1., 2.), Point3::new(1., 1., 3.)),
+        generate_mesh("./icosahedron.obj"),
         camera,
         1,
         light,
