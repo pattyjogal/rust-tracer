@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::fs::File;
 use std::io;
 use std::io::BufWriter;
@@ -8,13 +8,15 @@ use std::time::Instant;
 use std::vec::Vec;
 
 use nalgebra::{distance, Point3, Vector3};
+use ordered_float::NotNan;
 use png;
 use rand::Rng;
+use rayon::prelude::*;
 use tobj;
 
 use super::camera::Camera;
 use super::graphics_utils::{
-  compute_surrounding_box, AxisAlignedBoundingBox, ColorRGB, Hit, Hittable, Ray,
+  compute_surrounding_box, unit_vector, AxisAlignedBoundingBox, ColorRGB, Hit, Hittable, Ray,
 };
 
 /// A small value to offset some ray origins in calculations
@@ -75,10 +77,13 @@ impl RenderedScene {
     hit_detection_mode: HitDetectionMode,
   ) -> Self {
     let pixel_data: Vec<ColorRGB> = vec![default_color; image_height * image_width];
+    let mut objects_copy = objects.to_vec();
+    let now = Instant::now();
     let root_bvh_node = match &hit_detection_mode {
-      HitDetectionMode::Bvh => Some(BVHNode::new(&objects, 0, objects.len())),
+      HitDetectionMode::Bvh => Some(BVHNode::new(&mut objects_copy, 0, objects.len())),
       _ => None,
     };
+    println!("BVH Build Time: {}ms", now.elapsed().as_millis());
 
     RenderedScene {
       image_height,
@@ -95,7 +100,6 @@ impl RenderedScene {
 
   /// Computes the colors at each pixel, storing them for exporting
   pub fn render(&mut self) {
-    let now = Instant::now();
     for i in 0..self.image_width {
       for j in 0..self.image_height {
         self.render_pixel(i, j);
@@ -193,14 +197,14 @@ impl RenderedScene {
         }
         possible_obj_hit
       }
-      HitDetectionMode::Bvh => match self
+      HitDetectionMode::Bvh => { 
+        let now = Instant::now();
+        let temp = self
         .root_bvh_node
         .as_ref()
         .unwrap()
-        .get_intersected_object(ray, t_min, t_max)
-      {
-        Some(object) => Some((Hit::new(ray, 0., Vector3::new(0., 0., 0.)), object)),
-        None => None,
+        .get_intersected_object(ray, t_min, t_max);
+        return temp
       },
     }
   }
@@ -233,7 +237,7 @@ impl RenderedScene {
     // Translate the color data to byte values
     let data = self
       .pixel_data
-      .iter()
+      .par_iter()
       .flat_map(ColorRGB::as_slice)
       .map(|n| (n * 255.) as u8)
       .collect::<Vec<u8>>();
@@ -296,7 +300,7 @@ pub trait Renderable: Colorable + Hittable {
     // Calculate shading
     let ambient = self.material().k_ambient * ambient_color;
     let diffuse = self.material().k_diffuse
-      * Vector3::from(light.point - hit.point).dot(&hit.normal)
+      * unit_vector(Vector3::from(light.point - hit.point)).dot(&unit_vector(hit.normal))
       * light.color;
     let shaded_color = self.material().color.component_mul(&(ambient + diffuse));
 
@@ -443,46 +447,76 @@ impl Renderable for Sphere {
 /// Triangle
 pub struct Triangle {
   /// The first vertex
-  pub p0: Point3<f64>,
+  pub p0: Point3<NotNan<f64>>,
   /// The second vertex
-  pub p1: Point3<f64>,
+  pub p1: Point3<NotNan<f64>>,
   /// The third vertex
-  pub p2: Point3<f64>,
+  pub p2: Point3<NotNan<f64>>,
   /// The material used to shade the triangle
   pub material: Material,
+}
+
+impl Triangle {
+  /// Computes the area-weighted coordinates for this triangle
+  ///
+  /// # Arguments
+  /// `p`: The point to translate into barycentric coordinates
+  ///
+  /// # Returns
+  /// The barycentric coordinates of p relative to this triangle
+  fn barycentric_coords(&self, p: Point3<NotNan<f64>>) -> Point3<NotNan<f64>> {
+    let e1 = Vector3::from(self.p2 - self.p1);
+    let e2 = Vector3::from(self.p0 - self.p2);
+    let e3 = Vector3::from(self.p1 - self.p0);
+    let d1 = p - self.p0;
+    let d2 = p - self.p1;
+    let d3 = p - self.p2;
+    let n_hat = unit_vector(
+      e1.map(NotNan::into_inner)
+        .cross(&e2.map(NotNan::into_inner)),
+    )
+    .map(|x| NotNan::new(x).unwrap());
+    let a_t = (e1.cross(&e2)).dot(&n_hat) / 2.;
+    let a_t1 = (e1.cross(&d3)).dot(&n_hat) / 2.;
+    let a_t2 = (e2.cross(&d1)).dot(&n_hat) / 2.;
+    let a_t3 = (e3.cross(&d2)).dot(&n_hat) / 2.;
+
+    Point3::new(a_t1 / a_t, a_t2 / a_t, a_t3 / a_t)
+  }
 }
 
 impl Hittable for Triangle {
   fn check_ray_hit(&self, ray: &Ray, t_min: f64, t_max: f64) -> Option<Hit> {
     let e1 = Vector3::from(self.p1 - self.p0);
     let e2 = Vector3::from(self.p2 - self.p0);
-    let h = ray.direction.cross(&e2);
-    let a = e1.dot(&h);
+    let h = ray.direction.cross(&e2.map(NotNan::into_inner));
+    let a = e1.map(NotNan::into_inner).dot(&h);
 
     if a > -EPSILON && a < EPSILON {
       return None;
     }
 
     let f = 1.0 / a;
-    let s = ray.origin - self.p0;
+    let s = ray.origin - self.p0.map(NotNan::into_inner);
     let u = f * s.dot(&h);
     if u < 0. || u > 1. {
       return None;
     }
 
-    let q = s.cross(&e1);
+    let q = s.cross(&e1.map(NotNan::into_inner));
     let v = f * ray.direction.dot(&q);
     if v < 0. || u + v > 1. {
       return None;
     }
 
-    let t = f * e2.dot(&q);
+    let t = f * e2.map(NotNan::into_inner).dot(&q);
     if t > t_min && t < t_max {
-      return Some(Hit::new(&ray, t, e1.cross(&e2)));
+      return Some(Hit::new(&ray, t, (e1.cross(&e2)).map(NotNan::into_inner)));
     }
 
     None
   }
+
   fn get_bounding_box(&self, _: f64, _: f64) -> Option<AxisAlignedBoundingBox> {
     let xs = vec![self.p0.x, self.p1.x, self.p2.x];
     let ys = vec![self.p0.y, self.p1.y, self.p2.y];
@@ -490,14 +524,14 @@ impl Hittable for Triangle {
 
     Some(AxisAlignedBoundingBox {
       start: Point3::new(
-        xs.iter().cloned().fold(0. / 0., f64::min),
-        ys.iter().cloned().fold(0. / 0., f64::min),
-        zs.iter().cloned().fold(0. / 0., f64::min),
+        xs.par_iter().cloned().min().unwrap().into_inner(),
+        ys.par_iter().cloned().min().unwrap().into_inner(),
+        zs.par_iter().cloned().min().unwrap().into_inner(),
       ),
       end: Point3::new(
-        xs.iter().cloned().fold(0. / 0., f64::max),
-        ys.iter().cloned().fold(0. / 0., f64::max),
-        zs.iter().cloned().fold(0. / 0., f64::max),
+        xs.par_iter().cloned().max().unwrap().into_inner(),
+        ys.par_iter().cloned().max().unwrap().into_inner(),
+        zs.par_iter().cloned().max().unwrap().into_inner(),
       ),
     })
   }
@@ -559,12 +593,11 @@ fn compare_boxes(a: &Rc<dyn Renderable>, b: &Rc<dyn Renderable>, axis: usize) ->
 }
 
 impl BVHNode {
-  fn new(raw_objects: &Vec<Rc<dyn Renderable>>, start: usize, end: usize) -> BVHNode {
+  fn new(objects: &mut Vec<Rc<dyn Renderable>>, start: usize, end: usize) -> BVHNode {
     let mut rng = rand::thread_rng();
     let axis = rng.gen_range(0..=2);
     let comparator = |a, b| compare_boxes(a, b, axis);
     let object_span = end - start;
-    let mut objects = raw_objects.to_vec();
     let left;
     let right;
 
@@ -583,16 +616,16 @@ impl BVHNode {
         }
       }
       _ => {
-        objects.sort_by(|a, b| {
-          if compare_boxes(a, b, axis) {
-            std::cmp::Ordering::Less
-          } else {
-            std::cmp::Ordering::Greater
-          }
-        });
+        // objects.sort_by(|a, b| {
+        //   if compare_boxes(a, b, axis) {
+        //     std::cmp::Ordering::Less
+        //   } else {
+        //     std::cmp::Ordering::Greater
+        //   }
+        // });
         let mid = start + object_span / 2;
-        left = Rc::new(BVHNode::new(&objects, start, mid));
-        right = Rc::new(BVHNode::new(&objects, mid, end));
+        left = Rc::new(BVHNode::new(objects, start, mid));
+        right = Rc::new(BVHNode::new(objects, mid, end));
       }
     }
 
@@ -620,7 +653,7 @@ impl BVHNode {
     ray: &Ray,
     t_min: f64,
     t_max: f64,
-  ) -> Option<&Rc<dyn Renderable>> {
+  ) -> Option<(Hit, &Rc<dyn Renderable>)> {
     if !self.bounding_box.check_ray_hit(ray, t_min, t_max) {
       return None;
     }
@@ -628,7 +661,7 @@ impl BVHNode {
     let left_res = match self.left_child.node_type() {
       NodeType::Node(node) => node.get_intersected_object(ray, t_min, t_max),
       NodeType::Primitive => match self.left_child.check_ray_hit(ray, t_min, t_max) {
-        Some(_) => Some(&self.left_child),
+        Some(hit) => Some((hit, &self.left_child)),
         None => None,
       },
     };
@@ -640,7 +673,7 @@ impl BVHNode {
     let right_res = match self.right_child.node_type() {
       NodeType::Node(node) => node.get_intersected_object(ray, t_min, t_max),
       NodeType::Primitive => match self.right_child.check_ray_hit(ray, t_min, t_max) {
-        Some(_) => Some(&self.right_child),
+        Some(hit) => Some((hit, &self.right_child)),
         None => None,
       },
     };
@@ -701,9 +734,17 @@ impl std::fmt::Debug for BVHNode {
 
 pub struct Mesh {
   triangles: Vec<Triangle>,
+  vertex_to_normal: HashMap<Point3<NotNan<f64>>, Vector3<NotNan<f64>>>,
 }
 
 impl Mesh {
+  /// Instantiates a mesh from an OBJ file
+  ///
+  /// # Arguments
+  /// `filename` - The file path for the object file
+  ///
+  /// # Returns
+  /// An instantiated mesh
   pub fn from_obj(filename: &str) -> Result<Self, tobj::LoadError> {
     let (models, _materials) = tobj::load_obj(filename, false)?;
     match models.first() {
@@ -711,25 +752,46 @@ impl Mesh {
         let mesh = &model.mesh;
         let mut triangles = vec![];
         let mut next_face = 0;
+        let mut vertex_to_normal = HashMap::new();
 
         for f in 0..mesh.num_face_indices.len() {
           let end = next_face + mesh.num_face_indices[f] as usize;
-          let face_indices: Vec<_> = mesh.indices[next_face..end].iter().collect();
+          let face_indices: Vec<_> = mesh.indices[next_face..end].par_iter().collect();
           next_face = end;
 
+          let p0 = convert_vertices_to_point(&mesh.positions, *face_indices[0] as usize * 3)
+            .map(|x| NotNan::new(x).expect("NaN detected during mesh instantiation"));
+          let p1 = convert_vertices_to_point(&mesh.positions, *face_indices[1] as usize * 3)
+            .map(|x| NotNan::new(x).expect("NaN detected during mesh instantiation"));
+          let p2 = convert_vertices_to_point(&mesh.positions, *face_indices[2] as usize * 3)
+            .map(|x| NotNan::new(x).expect("NaN detected during mesh instantiation"));
+
+          // Compute & store vertex normals
+          let n = (p1 - p0).cross(&(p2 - p0));
+          let default = Vector3::new(0., 0., 0.).map(|x| NotNan::new(x).unwrap());
+          let curr_p0_norm = vertex_to_normal.get(&p0).unwrap_or(&default);
+          vertex_to_normal.insert(p0, curr_p0_norm + n);
+          let curr_p1_norm = vertex_to_normal.get(&p1).unwrap_or(&default);
+          vertex_to_normal.insert(p1, curr_p1_norm + n);
+          let curr_p2_norm = vertex_to_normal.get(&p2).unwrap_or(&default);
+          vertex_to_normal.insert(p2, curr_p2_norm + n);
+
           triangles.push(Triangle {
-            p0: convert_vertices_to_point(&mesh.positions, *face_indices[0] as usize * 3),
-            p1: convert_vertices_to_point(&mesh.positions, *face_indices[1] as usize * 3) ,
-            p2: convert_vertices_to_point(&mesh.positions, *face_indices[2] as usize * 3),
+            p0,
+            p1,
+            p2,
             material: Material {
               color: ColorRGB::new(0., 1., 1.),
-              k_ambient: 0.40,
-              k_diffuse: 0.60,
+              k_ambient: 0.10,
+              k_diffuse: 0.90,
             },
           });
         }
 
-        Ok(Mesh { triangles })
+        Ok(Mesh {
+          triangles,
+          vertex_to_normal,
+        })
       }
       None => Err(tobj::LoadError::GenericFailure),
     }
@@ -758,13 +820,34 @@ impl Colorable for Mesh {
 
 impl Hittable for Mesh {
   fn check_ray_hit(&self, ray: &Ray, t_min: f64, t_max: f64) -> Option<Hit> {
-    for triangle in &self.triangles {
-      if let Some(hit) = triangle.check_ray_hit(ray, t_min, t_max) {
-        return Some(hit);
+    let mut possible_obj_hit: Option<(Hit, &Triangle)> = None;
+    let mut closest_so_far = t_max;
+    for object in &self.triangles {
+      match object.check_ray_hit(ray, t_min, closest_so_far) {
+        Some(hit) => {
+          closest_so_far = hit.t;
+          possible_obj_hit = Some((hit, object));
+        }
+        None => {}
       }
     }
 
-    None
+    match possible_obj_hit {
+      Some((hit, triangle)) => {
+        let weights = triangle.barycentric_coords(hit.point.map(|x| NotNan::new(x).unwrap()));
+        let p0_normal = self.vertex_to_normal[&triangle.p0] * weights.x;
+        let p1_normal = self.vertex_to_normal[&triangle.p1] * weights.y;
+        let p2_normal = self.vertex_to_normal[&triangle.p2] * weights.z;
+
+        Some(Hit {
+          t: hit.t,
+          point: hit.point,
+          normal: (p0_normal + p1_normal + p2_normal).map(NotNan::into_inner),
+          front_face: hit.front_face,
+        })
+      }
+      None => None,
+    }
   }
 
   fn get_bounding_box(&self, t_start: f64, t_end: f64) -> Option<AxisAlignedBoundingBox> {

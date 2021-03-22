@@ -10,7 +10,7 @@ mod renderer;
 // Image
 const ASPECT_RATIO: f64 = 1.;
 // const ASPECT_RATIO: f64 = 16. / 9.;
-const IMAGE_WIDTH: usize = 300;
+const IMAGE_WIDTH: usize = 200;
 const IMAGE_HEIGHT: usize = (IMAGE_WIDTH as f64 / ASPECT_RATIO) as usize;
 
 fn generate_spheres_in_box(
@@ -20,15 +20,16 @@ fn generate_spheres_in_box(
     end: Point3<f64>,
 ) -> Vec<Rc<dyn renderer::Renderable>> {
     let mut ret: Vec<Rc<dyn renderer::Renderable>> = vec![];
+    let mut rng = rand::thread_rng();
 
     for _ in 0..n {
         ret.push(Rc::new(renderer::Sphere {
             radius,
             center: random_point_in_box(start, end),
             material: renderer::Material::new(
-                0.01,
-                0.99,
-                graphics_utils::ColorRGB::new(255. / 255., 195. / 255., 18. / 255.),
+                0.4,
+                0.6,
+                graphics_utils::ColorRGB::new(1., rng.gen::<f64>(), rng.gen::<f64>()),
             ),
         }))
     }
@@ -53,9 +54,9 @@ fn random_point_in_box(start: Point3<f64>, end: Point3<f64>) -> Point3<f64> {
 fn main() {
     // Render
     let camera = camera::Camera::new(
-        Point3::new(-15., 0., 10.),
-        Point3::new(0., 0., 10.),
-        Vector3::new(0., 0., -1.),
+        Point3::new(0., 0., 0.),
+        Point3::new(0., 0., 10000.),
+        Vector3::new(0., -1., 0.),
         45.,
         ASPECT_RATIO,
         camera::CameraMode::Perspective,
@@ -75,8 +76,8 @@ fn main() {
         renderer::Material::new(0.03, 0.97, graphics_utils::ColorRGB::new(0.25, 0.25, 0.35));
 
     let light = renderer::PointLight {
-        point: Point3::new(0., 1., -40.),
-        color: graphics_utils::ColorRGB::new(0.6, 0.6, 0.6),
+        point: Point3::new(1., 1., -10.),
+        color: graphics_utils::ColorRGB::new(0.9, 0.9, 0.9),
     };
 
     let objects: Vec<Rc<dyn renderer::Renderable>> = vec![
@@ -105,15 +106,15 @@ fn main() {
         //     material: red_mat,
         // }),
         // Small red sphere
-        // Rc::new(renderer::Sphere {
-        //     center: Point3::new(0.65, 0.25, 2.0),
-        //     radius: 0.25,
-        //     material: renderer::Material::new(
-        //         0.07,
-        //         0.93,
-        //         graphics_utils::ColorRGB::new(255. / 255., 99. / 255., 72. / 255.),
-        //     ),
-        // }),
+        Rc::new(renderer::Sphere {
+            center: Point3::new(0.65, 0.25, 2.0),
+            radius: 0.25,
+            material: renderer::Material::new(
+                0.9,
+                0.1,
+                graphics_utils::ColorRGB::new(255. / 255., 99. / 255., 72. / 255.),
+            ),
+        }),
         // Large orange sphere
         // Rc::new(renderer::Sphere {
         //     center: Point3::new(0., 0., 3.),
@@ -152,12 +153,12 @@ fn main() {
         //     ),
         // }),
         // Small navy blue pyramid
-        Rc::new(renderer::Triangle {
-            p0: Point3::new(1., 1., 1.),
-            p1: Point3::new(1., 1.0, 1.5),
-            p2: Point3::new(-0.35, 0.25, 1.45),
-            material: off_gray_mat,
-        }),
+        // Rc::new(renderer::Triangle {
+        //     p0: Point3::new(1., 1., 1.),
+        //     p1: Point3::new(1., 1.0, 1.5),
+        //     p2: Point3::new(-0.35, 0.25, 1.45),
+        //     material: off_gray_mat,
+        // }),
         // Rc::new(renderer::Triangle {
         //     p0: Point3::new(-0.3, 0.0, 1.4),
         //     p1: Point3::new(-0.165, 0.0, 1.44),
@@ -171,12 +172,12 @@ fn main() {
         IMAGE_WIDTH,
         graphics_utils::ColorRGB::new(0., 0., 0.),
         // objects,
-        // generate_spheres_in_box(10000, 0.05, Point3::new(-1., -1., 2.), Point3::new(1., 1., 3.)),
-        generate_mesh("./icosahedron.obj"),
+        // generate_spheres_in_box(100000, 0.05, Point3::new(-2., -2., 5.), Point3::new(2., 2., 6.)),
+        generate_mesh("./teapot.obj"),
         camera,
         1,
         light,
-        renderer::HitDetectionMode::Naive,
+        renderer::HitDetectionMode::Bvh,
     );
     scene.render();
 
