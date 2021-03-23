@@ -7,9 +7,12 @@ Currently supports:
   - Triangles
   - Spheres
   - Planes
+  - Meshes
 - Light Effects
   - Hard Shadows
   - Diffuse Shading
+  - Specular Shading
+  - Smooth Mesh Shading
 - Anti-Aliasing
   - Multi-Jittered Sampling
 - Camera Projections

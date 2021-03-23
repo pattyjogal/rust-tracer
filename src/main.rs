@@ -10,7 +10,7 @@ mod renderer;
 // Image
 const ASPECT_RATIO: f64 = 1.;
 // const ASPECT_RATIO: f64 = 16. / 9.;
-const IMAGE_WIDTH: usize = 200;
+const IMAGE_WIDTH: usize = 400;
 const IMAGE_HEIGHT: usize = (IMAGE_WIDTH as f64 / ASPECT_RATIO) as usize;
 
 fn generate_spheres_in_box(
@@ -54,8 +54,8 @@ fn random_point_in_box(start: Point3<f64>, end: Point3<f64>) -> Point3<f64> {
 fn main() {
     // Render
     let camera = camera::Camera::new(
-        Point3::new(0., 0., 0.),
-        Point3::new(0., 0., 10000.),
+        Point3::new(1., 0., -9.),
+        Point3::new(0., 1., 0.),
         Vector3::new(0., -1., 0.),
         45.,
         ASPECT_RATIO,
@@ -76,7 +76,7 @@ fn main() {
         renderer::Material::new(0.03, 0.97, graphics_utils::ColorRGB::new(0.25, 0.25, 0.35));
 
     let light = renderer::PointLight {
-        point: Point3::new(1., 1., -10.),
+        point: Point3::new(4., 1., -10.),
         color: graphics_utils::ColorRGB::new(0.9, 0.9, 0.9),
     };
 
@@ -177,7 +177,7 @@ fn main() {
         camera,
         1,
         light,
-        renderer::HitDetectionMode::Bvh,
+        renderer::HitDetectionMode::Naive,
     );
     scene.render();
 

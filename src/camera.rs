@@ -10,7 +10,7 @@ pub enum CameraMode {
 
 pub struct Camera {
   /// The camera's root position
-  origin: Point3<f64>,
+  pub origin: Point3<f64>,
   /// A vector representing the horizontal component of the view plane
   horizontal: Vector3<f64>,
   /// A vector representing the vertical component of the view plane

@@ -1,8 +1,6 @@
-use float_ord::FloatOrd;
 use nalgebra::{Point3, Vector3};
 
 use std::mem::swap;
-use std::rc::Rc;
 
 pub type ColorRGB = Vector3<f64>;
 
@@ -48,11 +46,7 @@ impl Hit {
   ///
   /// # Returns
   /// The constructed hit object
-  pub fn new(
-    ray: &Ray,
-    t: f64,
-    outward_normal: Vector3<f64>,
-  ) -> Hit {
+  pub fn new(ray: &Ray, t: f64, outward_normal: Vector3<f64>) -> Hit {
     let front_face = ray.direction.dot(&outward_normal) < 0.;
 
     Hit {
@@ -92,6 +86,7 @@ pub trait Hittable {
   fn get_bounding_box(&self, t_start: f64, t_end: f64) -> Option<AxisAlignedBoundingBox>;
 }
 
+/// A representation of an axis-aligned boundary box
 #[derive(Copy, Clone, Debug)]
 pub struct AxisAlignedBoundingBox {
   pub start: Point3<f64>,
@@ -99,6 +94,14 @@ pub struct AxisAlignedBoundingBox {
 }
 
 impl AxisAlignedBoundingBox {
+  /// Creates an AxisAlignedBoundingBox from a pair of opposite points
+  ///
+  /// # Arguments
+  /// `start` - The bottom-left-backmost point of the box
+  /// `end` The top-right-frontmost point of the box
+  ///
+  /// # Returns
+  /// An initialized AxisAlignedBoundingBox
   pub fn new(start: Point3<f64>, end: Point3<f64>) -> AxisAlignedBoundingBox {
     AxisAlignedBoundingBox { start, end }
   }
@@ -124,6 +127,14 @@ impl AxisAlignedBoundingBox {
   }
 }
 
+/// Given two AABBs, computes their surrounding AABB
+///
+/// # Arguments
+/// `first` - The first sub-box
+/// `second` - The second sub-box
+///
+/// # Returns
+/// The surrounding box of the two arguments
 pub fn compute_surrounding_box(
   first: &AxisAlignedBoundingBox,
   second: &AxisAlignedBoundingBox,

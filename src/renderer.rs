@@ -22,11 +22,14 @@ use super::graphics_utils::{
 /// A small value to offset some ray origins in calculations
 const EPSILON: f64 = 0.001;
 
+/// Represents which hit detection algorithm to use while rendering
 pub enum HitDetectionMode {
   Naive,
   Bvh,
 }
 
+/// Wrapper enum for nodes in the BVH tree
+/// Allows for distinguishing between a node with more children and a root node
 pub enum NodeType<'a> {
   Node(&'a BVHNode),
   Primitive,
@@ -48,7 +51,9 @@ pub struct RenderedScene {
   mj_fine_grid_size: usize,
   /// A point light to illuminate the scene
   light: PointLight,
+  /// The hit detection algorithm to use
   hit_detection_mode: HitDetectionMode,
+  /// If using BVH, this will be the root BVH node
   root_bvh_node: Option<BVHNode>,
 }
 
@@ -63,6 +68,7 @@ impl RenderedScene {
   /// `camera` - The camera used to generate the render of the scene
   /// `mj_find_grid_size` - The side length of the fine grid used in Multi-Jittered Sampling
   /// `light` - A point light to illuminate the scene
+  /// `hit_detection_mode` - The hit detection algorithm to use while rendering
   ///
   /// # Returns
   /// An initialized scene
@@ -151,7 +157,6 @@ impl RenderedScene {
         let j_offset = (j as f64 / self.mj_fine_grid_size as f64) / (self.image_height as f64 - 1.);
 
         let ray = self.camera.get_ray(u + i_offset, v + j_offset);
-        let now = Instant::now();
         let hit_objects = self.hit_objects(&ray, EPSILON, std::f64::INFINITY);
         match hit_objects {
           Some((hit, object)) => {
@@ -160,6 +165,7 @@ impl RenderedScene {
               &object.material().color,
               &self.light,
               &hit,
+              &self.camera.origin,
               &self.objects,
             );
             let pixel_val = self.pixel_data[x + y * self.image_width];
@@ -197,15 +203,15 @@ impl RenderedScene {
         }
         possible_obj_hit
       }
-      HitDetectionMode::Bvh => { 
+      HitDetectionMode::Bvh => {
         let now = Instant::now();
         let temp = self
-        .root_bvh_node
-        .as_ref()
-        .unwrap()
-        .get_intersected_object(ray, t_min, t_max);
-        return temp
-      },
+          .root_bvh_node
+          .as_ref()
+          .unwrap()
+          .get_intersected_object(ray, t_min, t_max);
+        return temp;
+      }
     }
   }
 
@@ -246,6 +252,14 @@ impl RenderedScene {
     Ok(())
   }
 
+  /// Computes the bounding box for the entire scene
+  ///
+  /// # Arguments
+  /// `start_time` - The time at the beginning of this frame for motition calculations
+  /// `start_time` - The time at the end of this frame for motition calculations
+  ///
+  /// # Returns
+  /// If all of the elements in the scene have AABBs, the surrounding AABB; otherwise, None.
   fn get_bounding_box(&self, start_time: f64, end_time: f64) -> Option<AxisAlignedBoundingBox> {
     let mut possible_output_box = None;
 
@@ -295,28 +309,37 @@ pub trait Renderable: Colorable + Hittable {
     ambient_color: &ColorRGB,
     light: &PointLight,
     hit: &Hit,
+    camera_point: &Point3<f64>,
     objects: &Vec<Rc<dyn Renderable>>,
   ) -> ColorRGB {
+    let incident = Vector3::from(light.point - hit.point);
+    let reflection = 2. * hit.normal * (incident.dot(&hit.normal)) - incident;
+
     // Calculate shading
     let ambient = self.material().k_ambient * ambient_color;
     let diffuse = self.material().k_diffuse
-      * unit_vector(Vector3::from(light.point - hit.point)).dot(&unit_vector(hit.normal))
+      * unit_vector(incident).dot(&unit_vector(hit.normal))
+      * self.material().color;
+    let specular = (1. - self.material().k_ambient - self.material().k_diffuse)
+      * unit_vector(Vector3::from(camera_point - hit.point))
+        .dot(&unit_vector(reflection))
+        .powf(0.9)
       * light.color;
-    let shaded_color = self.material().color.component_mul(&(ambient + diffuse));
+    let shaded_color = ambient + diffuse + specular;
 
     // Calculate shadow
-    // let ray_to_light = Ray {
-    //   origin: hit.point,
-    //   direction: Vector3::from(light.point - hit.point),
-    // };
+    let ray_to_light = Ray {
+      origin: hit.point,
+      direction: Vector3::from(light.point - hit.point),
+    };
 
     // TODO: Maybe this slows it a bit?
-    // for object in objects {
-    //   match object.check_ray_hit(&ray_to_light, 0.015, 1.0) {
-    //     Some(_hit) => return shaded_color - ColorRGB::new(0.3, 0.3, 0.3),
-    //     None => {}
-    //   }
-    // }
+    for object in objects {
+      match object.check_ray_hit(&ray_to_light, 0.015, 1.0) {
+        Some(_hit) => return shaded_color - ColorRGB::new(0.3, 0.3, 0.3),
+        None => {}
+      }
+    }
 
     shaded_color
   }
@@ -578,13 +601,28 @@ impl Material {
   }
 }
 
+/// A representation of a non-primitive node in a BVH structure
 struct BVHNode {
+  /// The surrounding bounding box of this node's children
   bounding_box: AxisAlignedBoundingBox,
+  /// The left subtree
   left_child: Rc<dyn Renderable>,
+  /// The right subtree
   right_child: Rc<dyn Renderable>,
+  /// (IGNORE) Needed as a hack to get around trait object issues
   dummy_material: Material,
 }
 
+/// Comparator to see if a renderable's box is closer than another's
+///
+/// # Arguments
+/// `a` - The first renderable to check
+/// `b` - The second renderable to check
+/// `axis` - The axis along which to compare
+///
+/// # Returns
+/// If `a`'s bounding box is closer to the origin on this axis than `b`'s.
+/// If one or both have no bounding box (e.g. a Plane), returns false
 fn compare_boxes(a: &Rc<dyn Renderable>, b: &Rc<dyn Renderable>, axis: usize) -> bool {
   match (a.get_bounding_box(0., 0.), b.get_bounding_box(0., 0.)) {
     (Some(a_box), Some(b_box)) => a_box.start[axis] < b_box.start[axis],
@@ -593,6 +631,7 @@ fn compare_boxes(a: &Rc<dyn Renderable>, b: &Rc<dyn Renderable>, axis: usize) ->
 }
 
 impl BVHNode {
+  /// Recursively instantiates the BVH tree
   fn new(objects: &mut Vec<Rc<dyn Renderable>>, start: usize, end: usize) -> BVHNode {
     let mut rng = rand::thread_rng();
     let axis = rng.gen_range(0..=2);
@@ -732,6 +771,7 @@ impl std::fmt::Debug for BVHNode {
   }
 }
 
+/// A representation of a mesh composed of smaller triangles
 pub struct Mesh {
   triangles: Vec<Triangle>,
   vertex_to_normal: HashMap<Point3<NotNan<f64>>, Vector3<NotNan<f64>>>,
@@ -783,7 +823,7 @@ impl Mesh {
             material: Material {
               color: ColorRGB::new(0., 1., 1.),
               k_ambient: 0.10,
-              k_diffuse: 0.90,
+              k_diffuse: 0.60,
             },
           });
         }
@@ -798,6 +838,11 @@ impl Mesh {
   }
 }
 
+/// Converts the `tobj` crate's data into `nalgebra::Point3`s
+///
+/// # Arguments
+/// `positions` - A list of all vertex positions loaded by `tobj`
+/// `i` - The index of the x component of the desired vertex
 fn convert_vertices_to_point(positions: &Vec<f32>, i: usize) -> Point3<f64> {
   Point3::new(
     positions[i].into(),
