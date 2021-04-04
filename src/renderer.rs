@@ -316,7 +316,7 @@ pub trait Renderable: Colorable + Hittable {
     let reflection = 2. * hit.normal * (incident.dot(&hit.normal)) - incident;
 
     // Calculate shading
-    let ambient = self.material().k_ambient * ambient_color;
+    let ambient = self.material().k_ambient * self.material().color;
     let diffuse = self.material().k_diffuse
       * unit_vector(incident).dot(&unit_vector(hit.normal))
       * self.material().color;
@@ -328,18 +328,18 @@ pub trait Renderable: Colorable + Hittable {
     let shaded_color = ambient + diffuse + specular;
 
     // Calculate shadow
-    let ray_to_light = Ray {
-      origin: hit.point,
-      direction: Vector3::from(light.point - hit.point),
-    };
+    // let ray_to_light = Ray {
+    //   origin: hit.point,
+    //   direction: Vector3::from(light.point - hit.point),
+    // };
 
-    // TODO: Maybe this slows it a bit?
-    for object in objects {
-      match object.check_ray_hit(&ray_to_light, 0.015, 1.0) {
-        Some(_hit) => return shaded_color - ColorRGB::new(0.3, 0.3, 0.3),
-        None => {}
-      }
-    }
+    // // TODO: Maybe this slows it a bit?
+    // for object in objects {
+    //   match object.check_ray_hit(&ray_to_light, 0.015, 1.0) {
+    //     Some(_hit) => return shaded_color - ColorRGB::new(0.3, 0.3, 0.3),
+    //     None => {}
+    //   }
+    // }
 
     shaded_color
   }
