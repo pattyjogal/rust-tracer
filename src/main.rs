@@ -7,6 +7,7 @@ use ordered_float::NotNan;
 mod camera;
 mod graphics_utils;
 mod renderer;
+mod material;
 
 // Image
 // const ASPECT_RATIO: f64 = 1.;
@@ -27,7 +28,7 @@ fn generate_spheres_in_box(
         ret.push(Rc::new(renderer::Sphere {
             radius,
             center: random_point_in_box(start, end),
-            material: renderer::Material::new(
+            material: material::Material::new(
                 0.4,
                 0.6,
                 graphics_utils::ColorRGB::new(1., rng.gen::<f64>(), rng.gen::<f64>()),
@@ -55,26 +56,26 @@ fn random_point_in_box(start: Point3<f64>, end: Point3<f64>) -> Point3<f64> {
 fn main() {
     // Render
     let camera = camera::Camera::new(
-        Point3::new(1., 1., -9.),
-        Point3::new(0., 0., 10000000.),
+        Point3::new(5., 1., -4.),
+        Point3::new(0., 0., 3.),
         Vector3::new(0., -1., 0.),
         45.,
         ASPECT_RATIO,
         camera::CameraMode::Perspective,
     );
 
-    let red_mat = renderer::Material::new(
+    let red_mat = material::Material::new(
         0.03,
         0.97,
         graphics_utils::ColorRGB::new(0.99215686274, 0.65490196078, 0.99215686274),
     );
-    let gray_mat = renderer::Material::new(
-        0.60,
-        0.40,
+    let gray_mat = material::Material::new(
+        0.80,
+        0.20,
         graphics_utils::ColorRGB::new(131. / 255., 149. / 255., 167. / 255.),
     );
     let off_gray_mat =
-        renderer::Material::new(0.03, 0.97, graphics_utils::ColorRGB::new(0.25, 0.25, 0.35));
+        material::Material::new(0.03, 0.97, graphics_utils::ColorRGB::new(0.25, 0.25, 0.35));
 
     let light = renderer::PointLight {
         point: Point3::new(0., 4., -12.),
@@ -110,7 +111,7 @@ fn main() {
         Rc::new(renderer::Sphere {
             center: Point3::new(0.65, 0.25, 2.0),
             radius: 0.25,
-            material: renderer::Material::new(
+            material: material::Material::new(
                 0.9,
                 0.1,
                 graphics_utils::ColorRGB::new(255. / 255., 99. / 255., 72. / 255.),
@@ -120,7 +121,7 @@ fn main() {
         Rc::new(renderer::Sphere {
             center: Point3::new(0., 0., 3.),
             radius: 0.5,
-            material: renderer::Material::new(
+            material: material::Material::new(
                 0.01,
                 0.99,
                 graphics_utils::ColorRGB::new(255. / 255., 195. / 255., 18. / 255.),
@@ -129,7 +130,7 @@ fn main() {
         Rc::new(renderer::Sphere {
             center: Point3::new(1., 0., 3.),
             radius: 0.5,
-            material: renderer::Material::new(
+            material: material::Material::new(
                 0.01,
                 0.99,
                 graphics_utils::ColorRGB::new(255. / 255., 195. / 255., 18. / 255.),
@@ -138,7 +139,7 @@ fn main() {
         Rc::new(renderer::Sphere {
             center: Point3::new(-1., 0., 3.),
             radius: 0.5,
-            material: renderer::Material::new(
+            material: material::Material::new(
                 0.01,
                 0.99,
                 graphics_utils::ColorRGB::new(255. / 255., 195. / 255., 18. / 255.),
@@ -147,7 +148,7 @@ fn main() {
         Rc::new(renderer::Sphere {
             center: Point3::new(0., 0., -3.),
             radius: 0.5,
-            material: renderer::Material::new(
+            material: material::Material::new(
                 0.01,
                 0.99,
                 graphics_utils::ColorRGB::new(255. / 255., 195. / 255., 18. / 255.),

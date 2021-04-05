@@ -18,6 +18,7 @@ use super::camera::Camera;
 use super::graphics_utils::{
   compute_surrounding_box, unit_vector, AxisAlignedBoundingBox, ColorRGB, Hit, Hittable, Ray,
 };
+use super::material::Material;
 
 /// A small value to offset some ray origins in calculations
 const EPSILON: f64 = 0.001;
@@ -317,29 +318,29 @@ pub trait Renderable: Colorable + Hittable {
 
     // Calculate shading
     let ambient = self.material().k_ambient * self.material().color;
-    let diffuse = self.material().k_diffuse
-      * unit_vector(incident).dot(&unit_vector(hit.normal))
+    let diffuse = (self.material().k_diffuse * unit_vector(incident).dot(&unit_vector(hit.normal)))
+      .max(0.)
       * self.material().color;
     let specular = (1. - self.material().k_ambient - self.material().k_diffuse)
       * unit_vector(Vector3::from(camera_point - hit.point))
         .dot(&unit_vector(reflection))
-        .powf(0.9)
+        .powf(1.0)
       * light.color;
     let shaded_color = ambient + diffuse + specular;
 
     // Calculate shadow
-    // let ray_to_light = Ray {
-    //   origin: hit.point,
-    //   direction: Vector3::from(light.point - hit.point),
-    // };
+    let ray_to_light = Ray {
+      origin: hit.point,
+      direction: Vector3::from(light.point - hit.point),
+    };
 
-    // // TODO: Maybe this slows it a bit?
-    // for object in objects {
-    //   match object.check_ray_hit(&ray_to_light, 0.015, 1.0) {
-    //     Some(_hit) => return shaded_color - ColorRGB::new(0.3, 0.3, 0.3),
-    //     None => {}
-    //   }
-    // }
+    // TODO: Maybe this slows it a bit?
+    for object in objects {
+      match object.check_ray_hit(&ray_to_light, 0.015, 1.0) {
+        Some(_hit) => return shaded_color - ColorRGB::new(0.3, 0.3, 0.3),
+        None => {}
+      }
+    }
 
     shaded_color
   }
@@ -578,27 +579,6 @@ pub struct PointLight {
   pub point: Point3<f64>,
   /// The light's color
   pub color: ColorRGB,
-}
-
-/// A representation of the object's shading parameters
-#[derive(Clone, Copy)]
-pub struct Material {
-  /// Diffuse constant term from Phong equation
-  k_diffuse: f64,
-  /// Ambient constant term from Phone equation
-  k_ambient: f64,
-  /// The color of the material
-  color: ColorRGB,
-}
-
-impl Material {
-  pub fn new(k_diffuse: f64, k_ambient: f64, color: ColorRGB) -> Material {
-    Material {
-      k_diffuse,
-      k_ambient,
-      color,
-    }
-  }
 }
 
 /// A representation of a non-primitive node in a BVH structure
