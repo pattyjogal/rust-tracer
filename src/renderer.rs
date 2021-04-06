@@ -18,7 +18,7 @@ use super::camera::Camera;
 use super::graphics_utils::{
   compute_surrounding_box, unit_vector, AxisAlignedBoundingBox, ColorRGB, Hit, Hittable, Ray,
 };
-use super::material::Material;
+use super::material::{Lambertian, Material};
 
 /// A small value to offset some ray origins in calculations
 const EPSILON: f64 = 0.001;
@@ -158,23 +158,12 @@ impl RenderedScene {
         let j_offset = (j as f64 / self.mj_fine_grid_size as f64) / (self.image_height as f64 - 1.);
 
         let ray = self.camera.get_ray(u + i_offset, v + j_offset);
-        let hit_objects = self.hit_objects(&ray, EPSILON, std::f64::INFINITY);
-        match hit_objects {
-          Some((hit, object)) => {
-            // TODO: Only works for now if default color is black
-            let color = object.calculate_shade_at_hit(
-              &object.material().color,
-              &self.light,
-              &hit,
-              &self.camera.origin,
-              &self.objects,
-            );
-            let pixel_val = self.pixel_data[x + y * self.image_width];
-            self.pixel_data[x + y * self.image_width] =
-              pixel_val + color / self.mj_fine_grid_size as f64
-          }
-          None => {}
-        }
+        // TODO: Only works for now if default color is black
+        // println!("{}, {}", x, y);
+        let color = self.calculate_shade_at_hit(&ray, 100);
+        let pixel_val = self.pixel_data[x + y * self.image_width];
+        self.pixel_data[x + y * self.image_width] =
+          pixel_val + color / self.mj_fine_grid_size as f64
       }
     }
   }
@@ -195,9 +184,12 @@ impl RenderedScene {
         let mut closest_so_far = t_max;
         for object in &self.objects {
           match object.check_ray_hit(ray, t_min, closest_so_far) {
-            Some(hit) => {
-              closest_so_far = hit.t;
-              possible_obj_hit = Some((hit, object));
+            Some(mut hit) => {
+              hit.normal = unit_vector(hit.normal);
+              if hit.t < closest_so_far {
+                closest_so_far = hit.t;
+                possible_obj_hit = Some((hit, object));
+              }
             }
             None => {}
           }
@@ -214,6 +206,99 @@ impl RenderedScene {
         return temp;
       }
     }
+  }
+
+  fn random_in_unit_sphere() -> Vector3<f64> {
+    let mut rng = rand::thread_rng();
+    loop {
+      let p: Vector3<f64> = Vector3::new(rng.gen_range(-1.0..1.),
+      rng.gen_range(-1.0..1.),
+      rng.gen_range(-1.0..1.));
+      if p.norm().powi(2) < 1. {
+        return p
+      }
+    }
+  }
+
+  /// Given that a ray has intersected this object, compute the exact shade that the
+  /// object's material will show. Factors in shadows and shading.
+  ///
+  /// # Arguments
+  /// `ambient_color` - The color used for the ambient term in the Phong equation
+  /// `light` - The light to use for checking shading and shadows
+  /// `hit` - The ray hit record that produced this color
+  /// `objects` - The objects in the scene that can product a shadow against this object
+  ///
+  /// # Returns
+  /// The color shown at this hit point
+  fn calculate_shade_at_hit(&self, incident: &Ray, depth: u32) -> ColorRGB {
+    // let incident = Ray{ origin: self.light.point, direction: Vector3::from(self.light.point - hit.point)};
+    // let reflection = 2. * hit.normal * (incident.dot(&hit.normal)) - incident;
+
+    // // Calculate shading
+    // let ambient = self.material().k_ambient * self.material().color;
+    // let diffuse = (self.material().k_diffuse * unit_vector(incident).dot(&unit_vector(hit.normal)))
+    //   .max(0.)
+    //   * self.material().color;
+    // let specular = (1. - self.material().k_ambient - self.material().k_diffuse)
+    //   * unit_vector(Vector3::from(camera_point - hit.point))
+    //     .dot(&unit_vector(reflection))
+    //     .powf(1.0)
+    //   * light.color;
+    // let shaded_color = ambient + diffuse + specular;
+
+    // // Calculate shadow
+    // let ray_to_light = Ray {
+    //   origin: hit.point,
+    //   direction: Vector3::from(light.point - hit.point),
+    // };
+
+    // // TODO: Maybe this slows it a bit?
+    // for object in objects {
+    //   match object.check_ray_hit(&ray_to_light, 0.015, 1.0) {
+    //     Some(_hit) => return shaded_color - ColorRGB::new(0.3, 0.3, 0.3),
+    //     None => {}
+    //   }
+    // }
+
+    // shaded_color
+
+    let diffuse: ColorRGB;
+
+    if depth <= 0 {
+      return ColorRGB::new(0., 0., 0.);
+    }
+
+    match self.hit_objects(incident, 0.001, std::f64::INFINITY) {
+      Some((hit, object)) => {
+        if let Some((attenuation, scattered_ray)) = object
+          .material()
+          .expect("Must have a material to shade")
+          .scatter(incident, &hit)
+        {
+          // println!("Recursing...");
+          // println!("Attn: {} * {}", attenuation, &self.calculate_shade_at_hit(&scattered_ray, depth - 1));
+          diffuse = attenuation.component_mul(&self.calculate_shade_at_hit(&scattered_ray, depth - 1))
+        // let target = hit.point + hit.normal + Self::random_in_unit_sphere();
+        // return 0.5 * self.calculate_shade_at_hit(&Ray {
+        //   origin: hit.point, direction: target - hit.point
+        // }, depth - 1)
+        
+          } else {
+          // println!("No scatter");
+          diffuse = ColorRGB::new(0., 0., 0.)
+        }
+
+       1. * diffuse + 0.0 * object.material().unwrap().albedo()
+      }
+      None => {
+        // println!("Hit this");
+        let unit_direction = unit_vector(incident.direction);
+        let t = 0.5 * (unit_direction.y + 1.);
+        (1.0 - t) * ColorRGB::new(1., 1., 1.) + t * ColorRGB::new(0.5, 0.7, 1.0)
+      }
+    }
+
   }
 
   /// Writes the stored pixel data out to a PNG image
@@ -246,7 +331,7 @@ impl RenderedScene {
       .pixel_data
       .par_iter()
       .flat_map(ColorRGB::as_slice)
-      .map(|n| (n * 255.) as u8)
+      .map(|n| (n.sqrt() * 255.) as u8)
       .collect::<Vec<u8>>();
     writer.write_image_data(&data[..])?;
 
@@ -286,7 +371,7 @@ pub trait Colorable {
   ///
   /// # Returns
   /// A reference to the object's material
-  fn material(&self) -> &Material;
+  fn material(&self) -> Option<Rc<dyn Material>>;
 }
 
 /// Objects that can be shown in the scene
@@ -294,57 +379,6 @@ pub trait Colorable {
 /// Must be both `Colorable` and `Hittable`, as items need to be
 /// detected and properly colored in to be shown
 pub trait Renderable: Colorable + Hittable {
-  /// Given that a ray has intersected this object, compute the exact shade that the
-  /// object's material will show. Factors in shadows and shading.
-  ///
-  /// # Arguments
-  /// `ambient_color` - The color used for the ambient term in the Phong equation
-  /// `light` - The light to use for checking shading and shadows
-  /// `hit` - The ray hit record that produced this color
-  /// `objects` - The objects in the scene that can product a shadow against this object
-  ///
-  /// # Returns
-  /// The color shown at this hit point
-  fn calculate_shade_at_hit(
-    &self,
-    ambient_color: &ColorRGB,
-    light: &PointLight,
-    hit: &Hit,
-    camera_point: &Point3<f64>,
-    objects: &Vec<Rc<dyn Renderable>>,
-  ) -> ColorRGB {
-    let incident = Vector3::from(light.point - hit.point);
-    let reflection = 2. * hit.normal * (incident.dot(&hit.normal)) - incident;
-
-    // Calculate shading
-    let ambient = self.material().k_ambient * self.material().color;
-    let diffuse = (self.material().k_diffuse * unit_vector(incident).dot(&unit_vector(hit.normal)))
-      .max(0.)
-      * self.material().color;
-    let specular = (1. - self.material().k_ambient - self.material().k_diffuse)
-      * unit_vector(Vector3::from(camera_point - hit.point))
-        .dot(&unit_vector(reflection))
-        .powf(1.0)
-      * light.color;
-    let shaded_color = ambient + diffuse + specular;
-
-    // Calculate shadow
-    let ray_to_light = Ray {
-      origin: hit.point,
-      direction: Vector3::from(light.point - hit.point),
-    };
-
-    // TODO: Maybe this slows it a bit?
-    for object in objects {
-      match object.check_ray_hit(&ray_to_light, 0.015, 1.0) {
-        Some(_hit) => return shaded_color - ColorRGB::new(0.3, 0.3, 0.3),
-        None => {}
-      }
-    }
-
-    shaded_color
-  }
-
   fn node_type(&self) -> NodeType;
 }
 
@@ -355,7 +389,7 @@ pub struct Plane {
   /// A normal vector for the plane
   pub normal: Vector3<f64>,
   /// The material used to shade the plane
-  pub material: Material,
+  pub material: Rc<dyn Material>,
 }
 
 impl Hittable for Plane {
@@ -376,8 +410,8 @@ impl Hittable for Plane {
 }
 
 impl Colorable for Plane {
-  fn material(&self) -> &Material {
-    &self.material
+  fn material(&self) -> Option<Rc<dyn Material>> {
+    Some(self.material.clone())
   }
 }
 
@@ -394,7 +428,7 @@ pub struct Sphere {
   /// The radius of the sphere
   pub radius: f64,
   /// The material used to shade the sphere
-  pub material: Material,
+  pub material: Rc<dyn Material>,
 }
 
 impl Sphere {
@@ -407,17 +441,18 @@ impl Sphere {
   /// The discriminant
   fn calc_discriminant(&self, ray: &Ray) -> f64 {
     let translated_origin = ray.origin - self.center;
-    let a = ray.direction.dot(&ray.direction);
-    let b = 2.0 * translated_origin.dot(&ray.direction);
-    let c = translated_origin.dot(&translated_origin) - self.radius * self.radius;
+    let a = ray.direction.norm().powi(2);
+    let b = translated_origin.dot(&ray.direction);
+    let c = translated_origin.norm().powi(2) - self.radius.powi(2);
 
-    b * b - 4. * a * c
+    b * b - a * c
   }
 }
 
 impl Hittable for Sphere {
   fn check_ray_hit(&self, ray: &Ray, t_min: f64, t_max: f64) -> Option<Hit> {
     let discriminant = self.calc_discriminant(ray);
+    // println!("{} {}", discriminant, ray.direction);
     if discriminant < 0. {
       return None;
     }
@@ -457,8 +492,8 @@ impl Hittable for Sphere {
 }
 
 impl Colorable for Sphere {
-  fn material(&self) -> &Material {
-    &self.material
+  fn material(&self) -> Option<Rc<dyn Material>> {
+    Some(self.material.clone())
   }
 }
 
@@ -477,7 +512,7 @@ pub struct Triangle {
   /// The third vertex
   pub p2: Point3<NotNan<f64>>,
   /// The material used to shade the triangle
-  pub material: Material,
+  pub material: Rc<dyn Material>,
 }
 
 impl Triangle {
@@ -562,8 +597,8 @@ impl Hittable for Triangle {
 }
 
 impl Colorable for Triangle {
-  fn material(&self) -> &Material {
-    &self.material
+  fn material(&self) -> Option<Rc<dyn Material>> {
+    Some(self.material.clone())
   }
 }
 
@@ -589,8 +624,6 @@ struct BVHNode {
   left_child: Rc<dyn Renderable>,
   /// The right subtree
   right_child: Rc<dyn Renderable>,
-  /// (IGNORE) Needed as a hack to get around trait object issues
-  dummy_material: Material,
 }
 
 /// Comparator to see if a renderable's box is closer than another's
@@ -659,11 +692,6 @@ impl BVHNode {
       bounding_box: compute_surrounding_box(&left_box, &right_box),
       left_child: left,
       right_child: right,
-      dummy_material: Material {
-        color: ColorRGB::new(0., 0., 0.),
-        k_ambient: 0.,
-        k_diffuse: 0.,
-      },
     }
   }
 
@@ -734,8 +762,8 @@ impl Hittable for BVHNode {
 // TODO: This is dumb, but because I can't convert Vec<&Renderable> -> Vec<&Hittable>,
 // I have to make this into a "colorable" object
 impl Colorable for BVHNode {
-  fn material(&self) -> &Material {
-    &self.dummy_material
+  fn material(&self) -> Option<Rc<dyn Material>> {
+    None
   }
 }
 
@@ -754,6 +782,7 @@ impl std::fmt::Debug for BVHNode {
 /// A representation of a mesh composed of smaller triangles
 pub struct Mesh {
   triangles: Vec<Triangle>,
+  material: Rc<dyn Material>,
   vertex_to_normal: HashMap<Point3<NotNan<f64>>, Vector3<NotNan<f64>>>,
 }
 
@@ -767,6 +796,10 @@ impl Mesh {
   /// An instantiated mesh
   pub fn from_obj(filename: &str) -> Result<Self, tobj::LoadError> {
     let (models, _materials) = tobj::load_obj(filename, false)?;
+    let material = Rc::new(Lambertian {
+      albedo: ColorRGB::new(0., 1., 1.),
+    });
+
     match models.first() {
       Some(model) => {
         let mesh = &model.mesh;
@@ -800,17 +833,14 @@ impl Mesh {
             p0,
             p1,
             p2,
-            material: Material {
-              color: ColorRGB::new(0., 1., 1.),
-              k_ambient: 0.10,
-              k_diffuse: 0.60,
-            },
+            material: material.clone(),
           });
         }
 
         Ok(Mesh {
           triangles,
           vertex_to_normal,
+          material,
         })
       }
       None => Err(tobj::LoadError::GenericFailure),
@@ -838,7 +868,7 @@ impl Renderable for Mesh {
 }
 
 impl Colorable for Mesh {
-  fn material(&self) -> &Material {
+  fn material(&self) -> Option<Rc<dyn Material>> {
     self.triangles.first().unwrap().material()
   }
 }

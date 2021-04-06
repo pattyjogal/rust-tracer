@@ -1,18 +1,18 @@
 use nalgebra::{Point3, Vector3};
 
+use ordered_float::NotNan;
 use rand::Rng;
 use std::rc::Rc;
-use ordered_float::NotNan;
 
 mod camera;
 mod graphics_utils;
-mod renderer;
 mod material;
+mod renderer;
 
 // Image
 // const ASPECT_RATIO: f64 = 1.;
 const ASPECT_RATIO: f64 = 16. / 9.;
-const IMAGE_WIDTH: usize = 500;
+const IMAGE_WIDTH: usize = 400;
 const IMAGE_HEIGHT: usize = (IMAGE_WIDTH as f64 / ASPECT_RATIO) as usize;
 
 fn generate_spheres_in_box(
@@ -23,16 +23,15 @@ fn generate_spheres_in_box(
 ) -> Vec<Rc<dyn renderer::Renderable>> {
     let mut ret: Vec<Rc<dyn renderer::Renderable>> = vec![];
     let mut rng = rand::thread_rng();
+    let mat = Rc::new(material::Lambertian::new(
+        graphics_utils::ColorRGB::new(1., rng.gen::<f64>(), rng.gen::<f64>()),
+    ));
 
     for _ in 0..n {
         ret.push(Rc::new(renderer::Sphere {
             radius,
             center: random_point_in_box(start, end),
-            material: material::Material::new(
-                0.4,
-                0.6,
-                graphics_utils::ColorRGB::new(1., rng.gen::<f64>(), rng.gen::<f64>()),
-            ),
+            material: mat.clone(),
         }))
     }
 
@@ -56,117 +55,100 @@ fn random_point_in_box(start: Point3<f64>, end: Point3<f64>) -> Point3<f64> {
 fn main() {
     // Render
     let camera = camera::Camera::new(
-        Point3::new(5., 1., -4.),
+        Point3::new(0., 0.0, -1.),
         Point3::new(0., 0., 3.),
         Vector3::new(0., -1., 0.),
-        45.,
+        90.,
         ASPECT_RATIO,
         camera::CameraMode::Perspective,
     );
 
-    let red_mat = material::Material::new(
-        0.03,
-        0.97,
-        graphics_utils::ColorRGB::new(0.99215686274, 0.65490196078, 0.99215686274),
-    );
-    let gray_mat = material::Material::new(
-        0.80,
-        0.20,
-        graphics_utils::ColorRGB::new(131. / 255., 149. / 255., 167. / 255.),
-    );
-    let off_gray_mat =
-        material::Material::new(0.03, 0.97, graphics_utils::ColorRGB::new(0.25, 0.25, 0.35));
+    let diffuse_mat = Rc::new(material::Lambertian::new(graphics_utils::ColorRGB::new(
+        0.7,
+        0.3,
+        0.3,
+    )));
+    let ground_mat = Rc::new(material::Lambertian::new(graphics_utils::ColorRGB::new(
+        0.8,
+        0.8,
+        0.0,
+    )));
+    let metal_mat = Rc::new(material::Metal::new(graphics_utils::ColorRGB::new(
+        0.75, 0.75, 0.75,
+    )));
 
     let light = renderer::PointLight {
-        point: Point3::new(0., 4., -12.),
+        point: Point3::new(0., 4., -100.),
         color: graphics_utils::ColorRGB::new(0.9, 0.9, 0.9),
     };
 
     let objects: Vec<Rc<dyn renderer::Renderable>> = vec![
-        Rc::new(renderer::Plane {
-            point: Point3::new(0., 0., 0.),
-            normal: Vector3::new(0., 1., 0.),
-            material: gray_mat,
-        }),
+        // Rc::new(renderer::Plane {
+        //     point: Point3::new(0., 0., 0.),
+        //     normal: Vector3::new(0., 1., 0.),
+        //     material: gray_mat,
+        // }),
         // Large pink pyramid
-        Rc::new(renderer::Triangle {
-            p0: Point3::new(-0.1, 0.0, 2.1).map(|x| NotNan::new(x).unwrap()),
-            p1: Point3::new(0.2, 0.0, 2.5).map(|x| NotNan::new(x).unwrap()),
-            p2: Point3::new(-0.07, 2.0, 2.15).map(|x| NotNan::new(x).unwrap()),
-            material: red_mat,
-        }),
-        Rc::new(renderer::Triangle {
-            p0: Point3::new(-0.1, 0.0, 2.1).map(|x| NotNan::new(x).unwrap()),
-            p1: Point3::new(-0.3, 0.0, 2.5).map(|x| NotNan::new(x).unwrap()),
-            p2: Point3::new(-0.07, 2.0, 2.15).map(|x| NotNan::new(x).unwrap()),
-            material: red_mat,
-        }),
-        Rc::new(renderer::Triangle {
-            p1: Point3::new(0.2, 0.0, 2.5).map(|x| NotNan::new(x).unwrap()),
-            p0: Point3::new(-0.3, 0.0, 2.5).map(|x| NotNan::new(x).unwrap()),
-            p2: Point3::new(-0.07, 2.0, 2.15).map(|x| NotNan::new(x).unwrap()),
-            material: red_mat,
-        }),
+        // Rc::new(renderer::Triangle {
+        //     p0: Point3::new(-0.1, 0.0, 2.1).map(|x| NotNan::new(x).unwrap()),
+        //     p1: Point3::new(0.2, 0.0, 2.5).map(|x| NotNan::new(x).unwrap()),
+        //     p2: Point3::new(-0.07, 2.0, 2.15).map(|x| NotNan::new(x).unwrap()),
+        //     material: red_mat,
+        // }),
+        // Rc::new(renderer::Triangle {
+        //     p0: Point3::new(-0.1, 0.0, 2.1).map(|x| NotNan::new(x).unwrap()),
+        //     p1: Point3::new(-0.3, 0.0, 2.5).map(|x| NotNan::new(x).unwrap()),
+        //     p2: Point3::new(-0.07, 2.0, 2.15).map(|x| NotNan::new(x).unwrap()),
+        //     material: red_mat,
+        // }),
+        // Rc::new(renderer::Triangle {
+        //     p1: Point3::new(0.2, 0.0, 2.5).map(|x| NotNan::new(x).unwrap()),
+        //     p0: Point3::new(-0.3, 0.0, 2.5).map(|x| NotNan::new(x).unwrap()),
+        //     p2: Point3::new(-0.07, 2.0, 2.15).map(|x| NotNan::new(x).unwrap()),
+        //     material: red_mat,
+        // }),
         // Small red sphere
         Rc::new(renderer::Sphere {
-            center: Point3::new(0.65, 0.25, 2.0),
-            radius: 0.25,
-            material: material::Material::new(
-                0.9,
-                0.1,
-                graphics_utils::ColorRGB::new(255. / 255., 99. / 255., 72. / 255.),
-            ),
+            center: Point3::new(0.0, 0.0, 0.0),
+            radius: 0.5,
+            material: diffuse_mat.clone(),
         }),
         // Large orange sphere
         Rc::new(renderer::Sphere {
-            center: Point3::new(0., 0., 3.),
+            center: Point3::new(-1., 0., 0.),
             radius: 0.5,
-            material: material::Material::new(
-                0.01,
-                0.99,
-                graphics_utils::ColorRGB::new(255. / 255., 195. / 255., 18. / 255.),
-            ),
+            material: metal_mat.clone(),
         }),
         Rc::new(renderer::Sphere {
-            center: Point3::new(1., 0., 3.),
-            radius: 0.5,
-            material: material::Material::new(
-                0.01,
-                0.99,
-                graphics_utils::ColorRGB::new(255. / 255., 195. / 255., 18. / 255.),
-            ),
+            center: Point3::new(0., -100.5, 0.),
+            radius: 100.,
+            material: metal_mat.clone(),
         }),
-        Rc::new(renderer::Sphere {
-            center: Point3::new(-1., 0., 3.),
-            radius: 0.5,
-            material: material::Material::new(
-                0.01,
-                0.99,
-                graphics_utils::ColorRGB::new(255. / 255., 195. / 255., 18. / 255.),
-            ),
-        }),
-        Rc::new(renderer::Sphere {
-            center: Point3::new(0., 0., -3.),
-            radius: 0.5,
-            material: material::Material::new(
-                0.01,
-                0.99,
-                graphics_utils::ColorRGB::new(255. / 255., 195. / 255., 18. / 255.),
-            ),
-        }),
-        // Small navy blue pyramid
-        Rc::new(renderer::Triangle {
-            p0: Point3::new(1., 1., 1.).map(|x| NotNan::new(x).unwrap()),
-            p1: Point3::new(1., 1.0, 1.5).map(|x| NotNan::new(x).unwrap()),
-            p2: Point3::new(-0.35, 0.25, 1.45).map(|x| NotNan::new(x).unwrap()),
-            material: off_gray_mat,
-        }),
-        Rc::new(renderer::Triangle {
-            p0: Point3::new(-0.3, 0.0, 1.4).map(|x| NotNan::new(x).unwrap()),
-            p1: Point3::new(-0.165, 0.0, 1.44).map(|x| NotNan::new(x).unwrap()),
-            p2: Point3::new(-0.35, 0.25, 1.45).map(|x| NotNan::new(x).unwrap()),
-            material: off_gray_mat,
-        }),
+        // Rc::new(renderer::Sphere {
+        //     center: Point3::new(1., 0., 3.),
+        //     radius: 0.5,
+        //     material: material::Material::new(
+        //         0.01,
+        //         0.99,
+        //         graphics_utils::ColorRGB::new(255. / 255., 195. / 255., 18. / 255.),
+        //     ),
+        // }),
+        // Rc::new(renderer::Sphere {
+        //     center: Point3::new(-1., 0., 3.),
+        //     radius: 0.5,
+        //     material: Rc::new(material::Lambertian::new(
+        //         graphics_utils::ColorRGB::new(255. / 255., 195. / 255., 18. / 255.),
+        //     )),
+        // }),
+        // Rc::new(renderer::Sphere {
+        //     center: Point3::new(0., 0., -3.),
+        //     radius: 0.5,
+        //     material: material::Material::new(
+        //         0.01,
+        //         0.99,
+        //         graphics_utils::ColorRGB::new(255. / 255., 195. / 255., 18. / 255.),
+        //     ),
+        // }),
     ];
 
     let mut scene = renderer::RenderedScene::new(
@@ -177,7 +159,7 @@ fn main() {
         // generate_spheres_in_box(100000, 0.05, Point3::new(-2., -2., 5.), Point3::new(2., 2., 6.)),
         // generate_mesh("./teapot.obj"),
         camera,
-        1,
+        4,
         light,
         renderer::HitDetectionMode::Naive,
     );
