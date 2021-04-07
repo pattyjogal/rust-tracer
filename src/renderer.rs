@@ -160,7 +160,7 @@ impl RenderedScene {
         let ray = self.camera.get_ray(u + i_offset, v + j_offset);
         // TODO: Only works for now if default color is black
         // println!("{}, {}", x, y);
-        let color = self.calculate_shade_at_hit(&ray, 100);
+        let color = self.calculate_shade_at_hit(&ray, 40);
         let pixel_val = self.pixel_data[x + y * self.image_width];
         self.pixel_data[x + y * self.image_width] =
           pixel_val + color / self.mj_fine_grid_size as f64
@@ -268,8 +268,9 @@ impl RenderedScene {
     if depth <= 0 {
       return ColorRGB::new(0., 0., 0.);
     }
-
-    match self.hit_objects(incident, 0.001, std::f64::INFINITY) {
+    // println!("Dir: {}", incident.direction);
+    // println!("Point: {}", incident.origin);
+    match self.hit_objects(incident, 0.01, std::f64::INFINITY) {
       Some((hit, object)) => {
         if let Some((attenuation, scattered_ray)) = object
           .material()
@@ -277,8 +278,9 @@ impl RenderedScene {
           .scatter(incident, &hit)
         {
           // println!("Recursing...");
-          // println!("Attn: {} * {}", attenuation, &self.calculate_shade_at_hit(&scattered_ray, depth - 1));
-          diffuse = attenuation.component_mul(&self.calculate_shade_at_hit(&scattered_ray, depth - 1))
+          let recursed_hit = &self.calculate_shade_at_hit(&scattered_ray, depth - 1);
+          // println!("Attn: {} * {}", attenuation, recursed_hit);
+          diffuse = attenuation.component_mul(&recursed_hit)
         // let target = hit.point + hit.normal + Self::random_in_unit_sphere();
         // return 0.5 * self.calculate_shade_at_hit(&Ray {
         //   origin: hit.point, direction: target - hit.point
@@ -289,7 +291,7 @@ impl RenderedScene {
           diffuse = ColorRGB::new(0., 0., 0.)
         }
 
-       1. * diffuse + 0.0 * object.material().unwrap().albedo()
+       diffuse
       }
       None => {
         // println!("Hit this");
@@ -451,29 +453,50 @@ impl Sphere {
 
 impl Hittable for Sphere {
   fn check_ray_hit(&self, ray: &Ray, t_min: f64, t_max: f64) -> Option<Hit> {
-    let discriminant = self.calc_discriminant(ray);
-    // println!("{} {}", discriminant, ray.direction);
+    // let discriminant = self.calc_discriminant(ray);
+    // // println!("{} {}", discriminant, ray.direction);
+    // if discriminant < 0. {
+    //   return None;
+    // }
+    // let sqrtd = discriminant.sqrt();
+
+    // // Disallow a hit starting from within the sphere
+    // if distance(&ray.origin, &self.center) < self.radius {
+    //   return None;
+    // }
+
+    // // Find nearest root in acceptable range
+    // let translated_origin = ray.origin - self.center;
+    // let a = ray.direction.dot(&ray.direction);
+    // let hb = translated_origin.dot(&ray.direction);
+
+    // // Check both roots to see if a hit occurred at all
+    // let mut root = (-hb - sqrtd) / a;
+    // if root < t_min || t_max < root {
+    //   root = (-hb + sqrtd) / a;
+    //   if root < t_min || t_max < root {
+    //     return None;
+    //   }
+    // }
+
+    // let point = ray.index(root);
+
+    let oc = ray.origin - self.center;
+    let a = ray.direction.norm().powi(2);
+    let half_b = oc.dot(&ray.direction);
+    let c = oc.norm().powi(2) - self.radius.powi(2);
+
+    let discriminant = half_b.powi(2) - a * c;
     if discriminant < 0. {
-      return None;
+      return None
     }
     let sqrtd = discriminant.sqrt();
 
-    // Disallow a hit starting from within the sphere
-    if distance(&ray.origin, &self.center) < self.radius {
-      return None;
-    }
-
-    // Find nearest root in acceptable range
-    let translated_origin = ray.origin - self.center;
-    let a = ray.direction.dot(&ray.direction);
-    let hb = translated_origin.dot(&ray.direction);
-
-    // Check both roots to see if a hit occurred at all
-    let mut root = (-hb - sqrtd) / a;
+    let mut root = (-half_b - sqrtd) / a;
     if root < t_min || t_max < root {
-      root = (-hb + sqrtd) / a;
+      root = (-half_b + sqrtd) / a;
       if root < t_min || t_max < root {
-        return None;
+        return None
       }
     }
 

@@ -10,8 +10,8 @@ mod material;
 mod renderer;
 
 // Image
-// const ASPECT_RATIO: f64 = 1.;
-const ASPECT_RATIO: f64 = 16. / 9.;
+const ASPECT_RATIO: f64 = 1.;
+// const ASPECT_RATIO: f64 = 16. / 9.;
 const IMAGE_WIDTH: usize = 400;
 const IMAGE_HEIGHT: usize = (IMAGE_WIDTH as f64 / ASPECT_RATIO) as usize;
 
@@ -73,6 +73,7 @@ fn main() {
         0.8,
         0.0,
     )));
+    let glass_mat = Rc::new(material::Dielectric::new(1.5));
     let metal_mat = Rc::new(material::Metal::new(graphics_utils::ColorRGB::new(
         0.75, 0.75, 0.75,
     )));
@@ -107,22 +108,25 @@ fn main() {
         //     p2: Point3::new(-0.07, 2.0, 2.15).map(|x| NotNan::new(x).unwrap()),
         //     material: red_mat,
         // }),
-        // Small red sphere
         Rc::new(renderer::Sphere {
             center: Point3::new(0.0, 0.0, 0.0),
             radius: 0.5,
-            material: diffuse_mat.clone(),
+            material: glass_mat.clone(),
         }),
-        // Large orange sphere
         Rc::new(renderer::Sphere {
             center: Point3::new(-1., 0., 0.),
             radius: 0.5,
             material: metal_mat.clone(),
         }),
         Rc::new(renderer::Sphere {
+            center: Point3::new(1., 0., 0.),
+            radius: 0.5,
+            material: glass_mat.clone(),
+        }),
+        Rc::new(renderer::Sphere {
             center: Point3::new(0., -100.5, 0.),
             radius: 100.,
-            material: metal_mat.clone(),
+            material: diffuse_mat.clone(),
         }),
         // Rc::new(renderer::Sphere {
         //     center: Point3::new(1., 0., 3.),
@@ -159,7 +163,7 @@ fn main() {
         // generate_spheres_in_box(100000, 0.05, Point3::new(-2., -2., 5.), Point3::new(2., 2., 6.)),
         // generate_mesh("./teapot.obj"),
         camera,
-        4,
+        16,
         light,
         renderer::HitDetectionMode::Naive,
     );

@@ -79,7 +79,7 @@ impl Camera {
     match &self.mode {
       CameraMode::Perspective => Ray {
         origin: self.origin,
-        direction: pixel_world_coords - self.origin,
+        direction: unit_vector(pixel_world_coords - self.origin),
       },
       CameraMode::Orthographic => Ray {
         origin: Point3::from(pixel_world_coords),
