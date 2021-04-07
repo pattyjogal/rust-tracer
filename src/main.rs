@@ -10,8 +10,8 @@ mod material;
 mod renderer;
 
 // Image
-const ASPECT_RATIO: f64 = 1.;
-// const ASPECT_RATIO: f64 = 16. / 9.;
+// const ASPECT_RATIO: f64 = 1.;
+const ASPECT_RATIO: f64 = 16. / 9.;
 const IMAGE_WIDTH: usize = 400;
 const IMAGE_HEIGHT: usize = (IMAGE_WIDTH as f64 / ASPECT_RATIO) as usize;
 
@@ -55,10 +55,10 @@ fn random_point_in_box(start: Point3<f64>, end: Point3<f64>) -> Point3<f64> {
 fn main() {
     // Render
     let camera = camera::Camera::new(
-        Point3::new(0., 0.0, -1.),
+        Point3::new(0., 1.0, -1.),
         Point3::new(0., 0., 3.),
         Vector3::new(0., -1., 0.),
-        90.,
+        45.,
         ASPECT_RATIO,
         camera::CameraMode::Perspective,
     );
@@ -79,7 +79,7 @@ fn main() {
     )));
 
     let light = renderer::PointLight {
-        point: Point3::new(0., 4., -100.),
+        point: Point3::new(2., 4., -3.),
         color: graphics_utils::ColorRGB::new(0.9, 0.9, 0.9),
     };
 
@@ -121,11 +121,16 @@ fn main() {
         Rc::new(renderer::Sphere {
             center: Point3::new(1., 0., 0.),
             radius: 0.5,
-            material: glass_mat.clone(),
+            material: metal_mat.clone(),
         }),
         Rc::new(renderer::Sphere {
             center: Point3::new(0., -100.5, 0.),
             radius: 100.,
+            material: diffuse_mat.clone(),
+        }),
+        Rc::new(renderer::Sphere {
+            center: Point3::new(0., 0., 4.),
+            radius: 1.0,
             material: diffuse_mat.clone(),
         }),
         // Rc::new(renderer::Sphere {
@@ -163,7 +168,7 @@ fn main() {
         // generate_spheres_in_box(100000, 0.05, Point3::new(-2., -2., 5.), Point3::new(2., 2., 6.)),
         // generate_mesh("./teapot.obj"),
         camera,
-        16,
+        4,
         light,
         renderer::HitDetectionMode::Naive,
     );

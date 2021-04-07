@@ -211,11 +211,13 @@ impl RenderedScene {
   fn random_in_unit_sphere() -> Vector3<f64> {
     let mut rng = rand::thread_rng();
     loop {
-      let p: Vector3<f64> = Vector3::new(rng.gen_range(-1.0..1.),
-      rng.gen_range(-1.0..1.),
-      rng.gen_range(-1.0..1.));
+      let p: Vector3<f64> = Vector3::new(
+        rng.gen_range(-1.0..1.),
+        rng.gen_range(-1.0..1.),
+        rng.gen_range(-1.0..1.),
+      );
       if p.norm().powi(2) < 1. {
-        return p
+        return p;
       }
     }
   }
@@ -277,30 +279,24 @@ impl RenderedScene {
           .expect("Must have a material to shade")
           .scatter(incident, &hit)
         {
-          // println!("Recursing...");
           let recursed_hit = &self.calculate_shade_at_hit(&scattered_ray, depth - 1);
-          // println!("Attn: {} * {}", attenuation, recursed_hit);
           diffuse = attenuation.component_mul(&recursed_hit)
-        // let target = hit.point + hit.normal + Self::random_in_unit_sphere();
-        // return 0.5 * self.calculate_shade_at_hit(&Ray {
-        //   origin: hit.point, direction: target - hit.point
-        // }, depth - 1)
-        
-          } else {
-          // println!("No scatter");
+        } else {
           diffuse = ColorRGB::new(0., 0., 0.)
         }
-
-       diffuse
+        // Specular shading
+        let light = Vector3::from(self.light.point - hit.point);
+        let view = -incident.direction; 
+        let h = unit_vector(light + view);
+        let specular = (hit.normal.dot(&h).max(0.)).powf(128.) * self.light.color;
+        0.3 * specular + 0.7 * diffuse
       }
       None => {
-        // println!("Hit this");
         let unit_direction = unit_vector(incident.direction);
         let t = 0.5 * (unit_direction.y + 1.);
         (1.0 - t) * ColorRGB::new(1., 1., 1.) + t * ColorRGB::new(0.5, 0.7, 1.0)
       }
     }
-
   }
 
   /// Writes the stored pixel data out to a PNG image
@@ -488,7 +484,7 @@ impl Hittable for Sphere {
 
     let discriminant = half_b.powi(2) - a * c;
     if discriminant < 0. {
-      return None
+      return None;
     }
     let sqrtd = discriminant.sqrt();
 
@@ -496,7 +492,7 @@ impl Hittable for Sphere {
     if root < t_min || t_max < root {
       root = (-half_b + sqrtd) / a;
       if root < t_min || t_max < root {
-        return None
+        return None;
       }
     }
 
