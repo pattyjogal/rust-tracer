@@ -265,8 +265,6 @@ impl RenderedScene {
 
     // shaded_color
 
-    let diffuse: ColorRGB;
-
     if depth <= 0 {
       return ColorRGB::new(0., 0., 0.);
     }
@@ -274,24 +272,27 @@ impl RenderedScene {
     // println!("Point: {}", incident.origin);
     match self.hit_objects(incident, 0.01, std::f64::INFINITY) {
       Some((hit, object)) => {
-        if let Some((attenuation, scattered_ray)) = object
-          .material()
-          .expect("Must have a material to shade")
+        let material = object.material().expect("Must have a material to shade");
+        let emitted = material.emitted(0., 0., hit.point);
+        let diffuse = if let Some((attenuation, scattered_ray)) = material          
           .scatter(incident, &hit)
         {
           let recursed_hit = &self.calculate_shade_at_hit(&scattered_ray, depth - 1);
-          diffuse = attenuation.component_mul(&recursed_hit)
+          emitted + attenuation.component_mul(&recursed_hit)
         } else {
-          diffuse = ColorRGB::new(0., 0., 0.)
-        }
+          // TODO: Implement texture maps
+          emitted
+        };
         // Specular shading
         let light = Vector3::from(self.light.point - hit.point);
-        let view = -incident.direction; 
+        let view = -incident.direction;
         let h = unit_vector(light + view);
         let specular = (hit.normal.dot(&h).max(0.)).powf(128.) * self.light.color;
-        0.3 * specular + 0.7 * diffuse
+        let (k_a, k_d, k_s) = material.phong_constants();
+        k_s * specular + k_d * diffuse + k_a * self.light.color
       }
       None => {
+        // ColorRGB::new(0., 0., 0.)
         let unit_direction = unit_vector(incident.direction);
         let t = 0.5 * (unit_direction.y + 1.);
         (1.0 - t) * ColorRGB::new(1., 1., 1.) + t * ColorRGB::new(0.5, 0.7, 1.0)

@@ -23,9 +23,11 @@ fn generate_spheres_in_box(
 ) -> Vec<Rc<dyn renderer::Renderable>> {
     let mut ret: Vec<Rc<dyn renderer::Renderable>> = vec![];
     let mut rng = rand::thread_rng();
-    let mat = Rc::new(material::Lambertian::new(
-        graphics_utils::ColorRGB::new(1., rng.gen::<f64>(), rng.gen::<f64>()),
-    ));
+    let mat = Rc::new(material::Lambertian::new(graphics_utils::ColorRGB::new(
+        1.,
+        rng.gen::<f64>(),
+        rng.gen::<f64>(),
+    )));
 
     for _ in 0..n {
         ret.push(Rc::new(renderer::Sphere {
@@ -55,7 +57,7 @@ fn random_point_in_box(start: Point3<f64>, end: Point3<f64>) -> Point3<f64> {
 fn main() {
     // Render
     let camera = camera::Camera::new(
-        Point3::new(0., 1.0, -1.),
+        Point3::new(0., 1.0, -3.),
         Point3::new(0., 0., 3.),
         Vector3::new(0., -1., 0.),
         45.,
@@ -64,18 +66,17 @@ fn main() {
     );
 
     let diffuse_mat = Rc::new(material::Lambertian::new(graphics_utils::ColorRGB::new(
-        0.7,
-        0.3,
-        0.3,
+        0.761, 0.698, 0.502,
     )));
     let ground_mat = Rc::new(material::Lambertian::new(graphics_utils::ColorRGB::new(
-        0.8,
-        0.8,
-        0.0,
+        0.8, 0.8, 0.0,
     )));
     let glass_mat = Rc::new(material::Dielectric::new(1.5));
     let metal_mat = Rc::new(material::Metal::new(graphics_utils::ColorRGB::new(
         0.75, 0.75, 0.75,
+    )));
+    let light_mat = Rc::new(material::DiffuseLight::new(graphics_utils::ColorRGB::new(
+        4., 4., 4.,
     )));
 
     let light = renderer::PointLight {
@@ -111,15 +112,15 @@ fn main() {
         Rc::new(renderer::Sphere {
             center: Point3::new(0.0, 0.0, 0.0),
             radius: 0.5,
-            material: glass_mat.clone(),
+            material: diffuse_mat.clone(),
         }),
         Rc::new(renderer::Sphere {
-            center: Point3::new(-1., 0., 0.),
+            center: Point3::new(-1., 0., 1.),
             radius: 0.5,
             material: metal_mat.clone(),
         }),
         Rc::new(renderer::Sphere {
-            center: Point3::new(1., 0., 0.),
+            center: Point3::new(1., 0., 1.),
             radius: 0.5,
             material: metal_mat.clone(),
         }),
@@ -128,11 +129,11 @@ fn main() {
             radius: 100.,
             material: diffuse_mat.clone(),
         }),
-        Rc::new(renderer::Sphere {
-            center: Point3::new(0., 0., 4.),
-            radius: 1.0,
-            material: diffuse_mat.clone(),
-        }),
+        // Rc::new(renderer::Sphere {
+        //     center: Point3::new(0., 0., 4.),
+        //     radius: 1.0,
+        //     material: light_mat.clone(),
+        // }),
         // Rc::new(renderer::Sphere {
         //     center: Point3::new(1., 0., 3.),
         //     radius: 0.5,
@@ -168,7 +169,7 @@ fn main() {
         // generate_spheres_in_box(100000, 0.05, Point3::new(-2., -2., 5.), Point3::new(2., 2., 6.)),
         // generate_mesh("./teapot.obj"),
         camera,
-        4,
+        32,
         light,
         renderer::HitDetectionMode::Naive,
     );

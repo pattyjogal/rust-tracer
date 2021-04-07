@@ -1,11 +1,15 @@
 use super::graphics_utils::{unit_vector, ColorRGB, Hit, Ray};
-use nalgebra::Vector3;
+use nalgebra::{Vector3, Point3};
 use rand::Rng;
 
 /// A representation of the object's shading parameters
 pub trait Material {
   fn scatter(&self, ray: &Ray, hit: &Hit) -> Option<(ColorRGB, Ray)>;
   fn albedo(&self) -> ColorRGB;
+  fn emitted(&self, _u: f64, _v: f64, _p: Point3<f64>) -> ColorRGB {
+    ColorRGB::new(0., 0., 0.)
+  }
+  fn phong_constants(&self) -> (f64, f64, f64);
 }
 
 pub struct Lambertian {
@@ -43,6 +47,10 @@ impl Material for Lambertian {
   fn albedo(&self) -> ColorRGB {
     self.albedo
   }
+
+  fn phong_constants(&self) -> (f64, f64, f64) {
+    (0.1, 0.85, 0.05)
+  }
 }
 
 pub struct Metal {
@@ -73,6 +81,10 @@ impl Material for Metal {
 
   fn albedo(&self) -> ColorRGB {
     self.albedo
+  }
+
+  fn phong_constants(&self) -> (f64, f64, f64) {
+    (0.0, 0.60, 0.40)
   }
 }
 
@@ -116,6 +128,38 @@ impl Material for Dielectric {
 
   fn albedo(&self) -> ColorRGB {
     ColorRGB::new(1., 1., 1.)
+  }
+
+  fn phong_constants(&self) -> (f64, f64, f64) {
+    (0.0, 0.60, 0.40)
+  }
+}
+
+pub struct DiffuseLight {
+  color: ColorRGB,
+}
+
+impl DiffuseLight {
+  pub fn new(color: ColorRGB) -> Self {
+    Self { color }
+  }
+}
+
+impl Material for DiffuseLight {
+  fn scatter(&self, _ray: &Ray, _hit: &Hit) -> Option<(ColorRGB, Ray)> {
+    None
+  }
+
+  fn albedo(&self) -> ColorRGB {
+    self.color
+  }
+
+  fn emitted(&self, _u: f64, _v: f64, _p: Point3<f64>) -> ColorRGB {
+    self.color
+  }
+
+  fn phong_constants(&self) -> (f64, f64, f64) {
+    (0.0, 1.0, 0.0)
   }
 }
 
