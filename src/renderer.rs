@@ -159,7 +159,6 @@ impl RenderedScene {
 
         let ray = self.camera.get_ray(u + i_offset, v + j_offset);
         // TODO: Only works for now if default color is black
-        // println!("{}, {}", x, y);
         let color = self.calculate_shade_at_hit(&ray, 40);
         let pixel_val = self.pixel_data[x + y * self.image_width];
         self.pixel_data[x + y * self.image_width] =
@@ -234,37 +233,6 @@ impl RenderedScene {
   /// # Returns
   /// The color shown at this hit point
   fn calculate_shade_at_hit(&self, incident: &Ray, depth: u32) -> ColorRGB {
-    // let incident = Ray{ origin: self.light.point, direction: Vector3::from(self.light.point - hit.point)};
-    // let reflection = 2. * hit.normal * (incident.dot(&hit.normal)) - incident;
-
-    // // Calculate shading
-    // let ambient = self.material().k_ambient * self.material().color;
-    // let diffuse = (self.material().k_diffuse * unit_vector(incident).dot(&unit_vector(hit.normal)))
-    //   .max(0.)
-    //   * self.material().color;
-    // let specular = (1. - self.material().k_ambient - self.material().k_diffuse)
-    //   * unit_vector(Vector3::from(camera_point - hit.point))
-    //     .dot(&unit_vector(reflection))
-    //     .powf(1.0)
-    //   * light.color;
-    // let shaded_color = ambient + diffuse + specular;
-
-    // // Calculate shadow
-    // let ray_to_light = Ray {
-    //   origin: hit.point,
-    //   direction: Vector3::from(light.point - hit.point),
-    // };
-
-    // // TODO: Maybe this slows it a bit?
-    // for object in objects {
-    //   match object.check_ray_hit(&ray_to_light, 0.015, 1.0) {
-    //     Some(_hit) => return shaded_color - ColorRGB::new(0.3, 0.3, 0.3),
-    //     None => {}
-    //   }
-    // }
-
-    // shaded_color
-
     if depth <= 0 {
       return ColorRGB::new(0., 0., 0.);
     }
@@ -289,13 +257,13 @@ impl RenderedScene {
         let h = unit_vector(light + view);
         let specular = (hit.normal.dot(&h).max(0.)).powf(128.) * self.light.color;
         let (k_a, k_d, k_s) = material.phong_constants();
-        k_s * specular + k_d * diffuse + k_a * self.light.color
+        k_s * specular + (k_d + k_a) * diffuse
       }
       None => {
-        // ColorRGB::new(0., 0., 0.)
-        let unit_direction = unit_vector(incident.direction);
-        let t = 0.5 * (unit_direction.y + 1.);
-        (1.0 - t) * ColorRGB::new(1., 1., 1.) + t * ColorRGB::new(0.5, 0.7, 1.0)
+        ColorRGB::new(0., 0., 0.)
+        // let unit_direction = unit_vector(incident.direction);
+        // let t = 0.5 * (unit_direction.y + 1.);
+        // (1.0 - t) * ColorRGB::new(1., 1., 1.) + t * ColorRGB::new(0.5, 0.7, 1.0)
       }
     }
   }
@@ -450,34 +418,6 @@ impl Sphere {
 
 impl Hittable for Sphere {
   fn check_ray_hit(&self, ray: &Ray, t_min: f64, t_max: f64) -> Option<Hit> {
-    // let discriminant = self.calc_discriminant(ray);
-    // // println!("{} {}", discriminant, ray.direction);
-    // if discriminant < 0. {
-    //   return None;
-    // }
-    // let sqrtd = discriminant.sqrt();
-
-    // // Disallow a hit starting from within the sphere
-    // if distance(&ray.origin, &self.center) < self.radius {
-    //   return None;
-    // }
-
-    // // Find nearest root in acceptable range
-    // let translated_origin = ray.origin - self.center;
-    // let a = ray.direction.dot(&ray.direction);
-    // let hb = translated_origin.dot(&ray.direction);
-
-    // // Check both roots to see if a hit occurred at all
-    // let mut root = (-hb - sqrtd) / a;
-    // if root < t_min || t_max < root {
-    //   root = (-hb + sqrtd) / a;
-    //   if root < t_min || t_max < root {
-    //     return None;
-    //   }
-    // }
-
-    // let point = ray.index(root);
-
     let oc = ray.origin - self.center;
     let a = ray.direction.norm().powi(2);
     let half_b = oc.dot(&ray.direction);

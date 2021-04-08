@@ -57,7 +57,7 @@ fn random_point_in_box(start: Point3<f64>, end: Point3<f64>) -> Point3<f64> {
 fn main() {
     // Render
     let camera = camera::Camera::new(
-        Point3::new(0., 1.0, -3.),
+        Point3::new(1., 1.0, -3.),
         Point3::new(0., 0., 3.),
         Vector3::new(0., -1., 0.),
         45.,
@@ -67,6 +67,9 @@ fn main() {
 
     let diffuse_mat = Rc::new(material::Lambertian::new(graphics_utils::ColorRGB::new(
         0.761, 0.698, 0.502,
+    )));
+    let diffuse2_mat = Rc::new(material::Lambertian::new(graphics_utils::ColorRGB::new(
+        0.10196078431, 0.46274509803, 0.27058823529,
     )));
     let ground_mat = Rc::new(material::Lambertian::new(graphics_utils::ColorRGB::new(
         0.8, 0.8, 0.0,
@@ -110,19 +113,24 @@ fn main() {
         //     material: red_mat,
         // }),
         Rc::new(renderer::Sphere {
-            center: Point3::new(0.0, 0.0, 0.0),
+            center: Point3::new(0.0, 0.5, 0.0),
             radius: 0.5,
-            material: diffuse_mat.clone(),
+            material: glass_mat.clone(),
+        }),
+        Rc::new(renderer::Sphere {
+            center: Point3::new(0.0, 0.0, 4.0),
+            radius: 1.5,
+            material: light_mat.clone(),
         }),
         Rc::new(renderer::Sphere {
             center: Point3::new(-1., 0., 1.),
             radius: 0.5,
-            material: metal_mat.clone(),
+            material: diffuse_mat.clone(),
         }),
         Rc::new(renderer::Sphere {
-            center: Point3::new(1., 0., 1.),
+            center: Point3::new(2., 0., 5.),
             radius: 0.5,
-            material: metal_mat.clone(),
+            material: diffuse2_mat.clone(),
         }),
         Rc::new(renderer::Sphere {
             center: Point3::new(0., -100.5, 0.),

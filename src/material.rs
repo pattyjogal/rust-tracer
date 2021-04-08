@@ -4,11 +4,26 @@ use rand::Rng;
 
 /// A representation of the object's shading parameters
 pub trait Material {
+  /// Simulates rays scattering off/through the surface of the material
+  /// 
+  /// # Arguments
+  /// `ray` - The incident ray to the material
+  /// `hit` - The hit record for the incident ray
+  /// 
+  /// # Returns
+  /// A possible scattered result with attenuation + the scattered ray
   fn scatter(&self, ray: &Ray, hit: &Hit) -> Option<(ColorRGB, Ray)>;
+  /// Returns the color of the material (used mostly for debugging)
   fn albedo(&self) -> ColorRGB;
+  /// Returns the emitted color from an emissive material
+  /// 
+  /// Defaults to returning black for materials that are not emissive
+  /// 
+  /// Note: the parameters are unused as I did not implement textures
   fn emitted(&self, _u: f64, _v: f64, _p: Point3<f64>) -> ColorRGB {
     ColorRGB::new(0., 0., 0.)
   }
+  /// Returns a triple of Phong shading constants (ambient, diffuse, specular)
   fn phong_constants(&self) -> (f64, f64, f64);
 }
 
@@ -163,6 +178,7 @@ impl Material for DiffuseLight {
   }
 }
 
+/// Produces a random vector of unit length
 fn random_unit_vector() -> Vector3<f64> {
   let mut rng = rand::thread_rng();
   let theta = rng.gen_range(0.0..=(2. * std::f64::consts::PI));
@@ -172,15 +188,20 @@ fn random_unit_vector() -> Vector3<f64> {
   Vector3::new(unit_z * theta.cos(), unit_z * theta.sin(), z)
 }
 
+/// Returns whether or not the supplied vector is within a certain tolerance of
+/// <0, 0, 0>
 fn near_zero(vec: &Vector3<f64>) -> bool {
   let eps: f64 = 1e-6;
   vec[0].abs() < eps && vec[1].abs() < eps && vec[2].abs() < eps
 }
 
+/// Reflects vector v about the given normal n
 fn reflect(v: &Vector3<f64>, n: &Vector3<f64>) -> Vector3<f64> {
   v - 2. * v.dot(n) * unit_vector(*n)
 }
 
+/// Refracts vector uv through a surface w/ normal n using an eta_i/eta_t ratio
+/// for refraction
 fn refract(uv: &Vector3<f64>, n: &Vector3<f64>, etai_over_etat: f64) -> Vector3<f64> {
   let cos_theta = (-uv).dot(&n).min(1.0);
   let r_out_perp = etai_over_etat * (uv + cos_theta * n);
